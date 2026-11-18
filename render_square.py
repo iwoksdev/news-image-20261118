@@ -28,22 +28,23 @@ RED = (176, 32, 28)
 GOLD = (250, 206, 70)
 
 FONT_DIR = os.path.join(HERE, "fonts")
-SERIF = "NotoSerif-Regular.ttf"
-SERIF_B = "NotoSerif-Bold.ttf"
-SERIF_XB = "NotoSerif-ExtraBold.ttf"
-SERIF_I = "NotoSerif-Italic.ttf"
-SANS = "NotoSans-Regular.ttf"
-SANS_B = "NotoSans-Bold.ttf"
-DISPLAY = "PlayfairDisplay-Black.ttf"
-DISPLAY2 = "NotoSerifDisplay-Black.ttf"
-PF_B = "PlayfairDisplay-Bold.ttf"
-PF_XB = "PlayfairDisplay-ExtraBold.ttf"
-GAR = "EBGaramond-Regular.ttf"
-GAR_M = "EBGaramond-Medium.ttf"
-GAR_SB = "EBGaramond-SemiBold.ttf"
-GAR_I = "EBGaramond-Italic.ttf"
-DMS = "DMSerifDisplay-Regular.ttf"
-DMS_I = "DMSerifDisplay-Italic.ttf"
+# NYT three-font system (open substitutes): Playfair = Cheltenham role,
+# PT Serif = Imperial role, Inter Bold tracked caps = Franklin Gothic role.
+HEAD = "PlayfairDisplay-Bold.ttf"
+HEAD_BK = "PlayfairDisplay-Black.ttf"
+BODY = "PTSerif-Regular.ttf"
+BODY_B = "PTSerif-Bold.ttf"
+BODY_I = "PTSerif-Italic.ttf"
+LABEL = "Inter-Bold.ttf"
+LABEL_R = "Inter-Regular.ttf"
+LABEL_SB = "Inter-SemiBold.ttf"
+# legacy aliases used by the art functions
+SERIF, SERIF_B, SERIF_XB, SERIF_I = BODY, BODY_B, BODY_B, BODY_I
+SANS, SANS_B = LABEL_R, LABEL
+DISPLAY, DISPLAY2 = HEAD_BK, HEAD
+PF_B, PF_XB = HEAD, HEAD
+GAR, GAR_M, GAR_SB, GAR_I = BODY, BODY, BODY_B, BODY_I
+DMS, DMS_I = HEAD, HEAD
 
 # region palette (keys used in stories.json colours -> mapped by hex)
 REGION = {
@@ -134,6 +135,21 @@ class Canvas:
 
     def text(self, x, y, s, font_name, size, fill=INK, anchor="la"):
         self.d.text((x * SS, y * SS), s, font=F(font_name, size), fill=fill, anchor=anchor)
+
+    def tracked(self, x, y, s, size, fill=INK, tracking=1.6, font_name=None, anchor="l"):
+        """Inter Bold, uppercase, letter-spaced (the Franklin role). anchor l/r/m."""
+        font_name = font_name or LABEL
+        s = s.upper()
+        widths = [self.tw(ch, font_name, size) for ch in s]
+        total = sum(widths) + tracking * (len(s) - 1)
+        if anchor == "r":
+            x = x - total
+        elif anchor == "m":
+            x = x - total / 2
+        for ch, w in zip(s, widths):
+            self.text(x, y, ch, font_name, size, fill)
+            x += w + tracking
+        return total
 
     def ctext(self, cx, y, s, font_name, size, fill=INK):
         self.text(cx, y, s, font_name, size, fill, anchor="ma")
@@ -248,292 +264,222 @@ def chip(cv, x, y, s, font, size, fg=INK, bg=(255, 255, 255), pad=4, right=False
 
 
 # --------------------------------------------------------------------------- hero art
-def flag(cv, x, y, w, h, kind):
-    if kind == "cn":
-        cv.rect(x, y, w, h, fill=(222, 41, 16))
-        cv.star(x + w * 0.2, y + h * 0.3, h * 0.2, h * 0.085, (255, 222, 0))
-        for dx, dy in ((0.40, 0.12), (0.48, 0.27), (0.48, 0.47), (0.40, 0.62)):
-            cv.star(x + w * dx, y + h * dy, h * 0.07, h * 0.03, (255, 222, 0))
-    elif kind == "us":
-        for s_ in range(13):
-            cv.rect(x, y + s_ * h / 13, w, h / 13 + 0.02, fill=(178, 34, 52) if s_ % 2 == 0 else (255, 255, 255))
-        cv.rect(x, y, w * 0.42, h * 7 / 13, fill=(60, 59, 110))
+def flag_us(cv, x, y, w, h):
+    """13 stripes, 50 stars (rows of 6/5)."""
+    for i in range(13):
+        cv.rect(x, y + i * h / 13, w, h / 13 + 0.03, fill=(178, 34, 52) if i % 2 == 0 else (255, 255, 255))
+    cw, ch = w * 0.40, h * 7 / 13
+    cv.rect(x, y, cw, ch, fill=(60, 59, 110))
+    r = min(cw / 6, ch / 9) * 0.28
+    for row in range(9):
+        n = 6 if row % 2 == 0 else 5
+        for k in range(n):
+            sx = x + cw * ((k + 0.5) / 6 if n == 6 else (k + 1.0) / 6)
+            sy = y + ch * (row + 0.5) / 9
+            cv.star(sx, sy, r, r * 0.45, (255, 255, 255))
+
+
+def flag_cn(cv, x, y, w, h):
+    cv.rect(x, y, w, h, fill=(222, 41, 16))
+    cv.star(x + w * 0.17, y + h * 0.25, h * 0.15, h * 0.065, (255, 222, 0))
+    for dx, dy, rot in ((0.33, 0.10, -90), (0.40, 0.22, -90), (0.40, 0.38, -90), (0.33, 0.50, -90)):
+        cv.star(x + w * dx, y + h * dy, h * 0.05, h * 0.022, (255, 222, 0), rot=rot)
+
+
+def flag_on_pole(cv, x, base, H, kind, side):
+    """Pole at x standing on `base`; flag of height ~0.32H hangs to `side` (+1 right, -1 left)."""
+    top = base - H
+    cv.line([(x, base), (x, top)], (176, 170, 150), 1.4)
+    cv.ell(x, top - 1.2, 1.6, 1.6, fill=(212, 178, 92))
+    fw, fh = H * 0.46, H * 0.30
+    fx = x + 1 if side > 0 else x - 1 - fw
+    fy = top + 1.5
+    if kind == "us":
+        flag_us(cv, fx, fy, fw, fh)
     else:
-        cv.rect(x, y, w, h / 3, fill=(255, 255, 255))
-        cv.rect(x, y + h / 3, w, h / 3, fill=(0, 57, 166))
-        cv.rect(x, y + 2 * h / 3, w, h / 3, fill=(213, 43, 30))
+        flag_cn(cv, fx, fy, fw, fh)
+    cv.line([(fx, fy + fh), (fx + fw, fy + fh)], (120, 110, 100), 0.4)
 
 
-def person(cv, x, base, h, suit, hair, tie=None, lean=0.0):
-    """Simple standing figure, feet at (x, base), height h. lean>0 tips the torso right."""
-    hw = h * 0.16
-    head_r = h * 0.085
-    torso_top = base - h * 0.78
-    torso_bot = base - h * 0.42
-    dx = lean * h * 0.12
-    cv.poly([(x - hw * 0.8, torso_bot), (x + hw * 0.8, torso_bot), (x + hw * 0.55, base), (x - hw * 0.55, base)], fill=suit)
-    cv.line([(x, torso_bot), (x, base - h * 0.05)], (12, 12, 16), h * 0.012)
-    cv.poly([(x - hw + dx * 0.4, torso_top), (x + hw + dx * 0.4, torso_top), (x + hw * 0.9, torso_bot), (x - hw * 0.9, torso_bot)], fill=suit)
-    cv.poly([(x + dx * 0.4 - hw * 0.22, torso_top), (x + dx * 0.4 + hw * 0.22, torso_top), (x + dx * 0.2, torso_top + h * 0.14)], fill=(245, 245, 248))
-    if tie:
-        cv.poly([(x + dx * 0.4 - hw * 0.07, torso_top + h * 0.02), (x + dx * 0.4 + hw * 0.07, torso_top + h * 0.02), (x + dx * 0.2, torso_top + h * 0.19)], fill=tie)
-    hx, hy = x + dx, torso_top - head_r * 1.05
-    cv.rect(hx - head_r * 0.35, torso_top - head_r * 0.5, head_r * 0.7, head_r * 0.6, fill=(226, 184, 150))
-    cv.ell(hx, hy, head_r, head_r * 1.08, fill=(230, 190, 156))
-    cv.d.pieslice([(hx - head_r) * SS, (hy - head_r * 1.08) * SS, (hx + head_r) * SS, (hy + head_r * 1.08) * SS], 190, 350, fill=hair)
+def portrait(cv, x, base, H, hair, tie, suit=(32, 36, 56), skin=(232, 196, 166), hair_style="side"):
+    """Forward-facing standing figure, feet at (x, base), total height H."""
+    hw = H * 0.17            # half shoulder width
+    head_r = H * 0.072
+    shoulder_y = base - H * 0.74
+    hem_y = base - H * 0.40
+    leg_h = hem_y - (base - H * 0.03)
+    # ground shadow
+    cv.ell(x, base + 1.5, hw * 1.5, H * 0.02, fill=(196, 196, 198))
+    # shoes
+    for sx in (x - hw * 0.42, x + hw * 0.42):
+        cv.rrect(sx - hw * 0.30, base - H * 0.03, hw * 0.60, H * 0.03, H * 0.012, fill=(24, 24, 28))
+    # trousers
+    for sx in (x - hw * 0.40, x + hw * 0.40):
+        cv.rrect(sx - hw * 0.34, hem_y - H * 0.02, hw * 0.68, (base - H * 0.03) - hem_y + H * 0.02, H * 0.01, fill=suit)
+    # jacket body
+    cv.poly([(x - hw, shoulder_y + H * 0.01), (x + hw, shoulder_y + H * 0.01), (x + hw * 0.86, hem_y), (x - hw * 0.86, hem_y)], fill=suit)
+    cv.ell(x - hw * 0.70, shoulder_y + H * 0.03, hw * 0.34, H * 0.03, fill=suit)
+    cv.ell(x + hw * 0.70, shoulder_y + H * 0.03, hw * 0.34, H * 0.03, fill=suit)
+    # arms
+    for sgn in (-1, 1):
+        ax = x + sgn * hw * 0.98
+        cv.rrect(ax - hw * 0.22, shoulder_y + H * 0.04, hw * 0.44, H * 0.30, hw * 0.2, fill=suit)
+        cv.ell(ax + sgn * hw * 0.02, shoulder_y + H * 0.355, hw * 0.17, H * 0.022, fill=skin)
+    # shirt + lapels + tie
+    cv.poly([(x - hw * 0.36, shoulder_y + H * 0.01), (x + hw * 0.36, shoulder_y + H * 0.01), (x, shoulder_y + H * 0.17)], fill=(246, 246, 248))
+    lap = tuple(min(255, c_ + 16) for c_ in suit)
+    cv.poly([(x - hw * 0.40, shoulder_y + H * 0.005), (x - hw * 0.10, shoulder_y + H * 0.005), (x - hw * 0.02, shoulder_y + H * 0.19), (x - hw * 0.16, shoulder_y + H * 0.17)], fill=lap)
+    cv.poly([(x + hw * 0.40, shoulder_y + H * 0.005), (x + hw * 0.10, shoulder_y + H * 0.005), (x + hw * 0.02, shoulder_y + H * 0.19), (x + hw * 0.16, shoulder_y + H * 0.17)], fill=lap)
+    cv.poly([(x - hw * 0.085, shoulder_y + H * 0.02), (x + hw * 0.085, shoulder_y + H * 0.02), (x + hw * 0.07, shoulder_y + H * 0.20), (x, shoulder_y + H * 0.23), (x - hw * 0.07, shoulder_y + H * 0.20)], fill=tie)
+    cv.poly([(x - hw * 0.085, shoulder_y + H * 0.02), (x + hw * 0.085, shoulder_y + H * 0.02), (x, shoulder_y + H * 0.045)], fill=tuple(max(0, c_ - 40) for c_ in tie))
+    # pocket square, lapel pin, buttons
+    cv.rect(x - hw * 0.62, shoulder_y + H * 0.085, hw * 0.16, H * 0.012, fill=(246, 246, 248))
+    cv.ell(x - hw * 0.30, shoulder_y + H * 0.11, hw * 0.045, hw * 0.045, fill=(214, 182, 96))
+    for by_ in (0.26, 0.31):
+        cv.ell(x + hw * 0.04, shoulder_y + H * by_, hw * 0.03, hw * 0.03, fill=(70, 74, 92))
+    # neck + head
+    neck_y = shoulder_y - H * 0.02
+    cv.rect(x - head_r * 0.42, neck_y - H * 0.03, head_r * 0.84, H * 0.06, fill=skin)
+    hy = neck_y - head_r * 1.15
+    cv.ell(x - head_r * 0.98, hy + head_r * 0.1, head_r * 0.16, head_r * 0.26, fill=skin)
+    cv.ell(x + head_r * 0.98, hy + head_r * 0.1, head_r * 0.16, head_r * 0.26, fill=skin)
+    cv.ell(x, hy, head_r, head_r * 1.22, fill=skin)
+    # hair
+    if hair_style == "swept":   # blond, swept forward, fuller on top
+        cv.d.pieslice([(x - head_r * 1.02) * SS, (hy - head_r * 1.34) * SS, (x + head_r * 1.02) * SS, (hy + head_r * 0.95) * SS], 185, 355, fill=hair)
+        cv.ell(x - head_r * 0.15, hy - head_r * 1.05, head_r * 0.9, head_r * 0.36, fill=hair)
+        cv.poly([(x - head_r * 1.0, hy - head_r * 0.25), (x - head_r * 0.95, hy - head_r * 0.85), (x + head_r * 0.5, hy - head_r * 1.1), (x + head_r * 0.95, hy - head_r * 0.6), (x + head_r * 0.5, hy - head_r * 0.55), (x - head_r * 0.3, hy - head_r * 0.45)], fill=hair)
+    else:                      # dark, neat, side-parted
+        cv.d.pieslice([(x - head_r * 1.0) * SS, (hy - head_r * 1.26) * SS, (x + head_r * 1.0) * SS, (hy + head_r * 0.9) * SS], 190, 350, fill=hair)
+        cv.poly([(x - head_r * 0.98, hy - head_r * 0.3), (x - head_r * 0.9, hy - head_r * 0.8), (x + head_r * 0.3, hy - head_r * 0.95), (x + head_r * 0.98, hy - head_r * 0.55), (x + head_r * 0.98, hy - head_r * 0.3), (x + head_r * 0.6, hy - head_r * 0.55), (x - head_r * 0.2, hy - head_r * 0.5)], fill=hair)
+    # features: gentle, not caricature
+    ey = hy - head_r * 0.05
+    for sgn in (-1, 1):
+        cv.ell(x + sgn * head_r * 0.38, ey, head_r * 0.11, head_r * 0.075, fill=(60, 48, 44))
+        cv.line([(x + sgn * head_r * 0.58, ey - head_r * 0.28), (x + sgn * head_r * 0.2, ey - head_r * 0.24)], tuple(max(0, c_ - 10) for c_ in hair) if hair_style != "swept" else (170, 140, 90), head_r * 0.07)
+    cv.line([(x, ey + head_r * 0.05), (x - head_r * 0.07, ey + head_r * 0.45), (x + head_r * 0.08, ey + head_r * 0.48)], (196, 150, 124), head_r * 0.06)
+    cv.line([(x - head_r * 0.28, ey + head_r * 0.78), (x, ey + head_r * 0.84), (x + head_r * 0.28, ey + head_r * 0.78)], (160, 96, 90), head_r * 0.07)
 
 
-def art_apec(w, h):
+def art_lead(w, h):
+    """Two leaders, two flags: Trump beside the US flag, Xi beside the Chinese flag."""
     cv = Canvas(w, h)
-    horizon = h * 0.66
-    # sky
-    cv.vgrad(0, 0, w, horizon, (232, 110, 58), (254, 216, 164))
-    sx, sy = w * 0.835, h * 0.20
-    cv.ell(sx, sy, 10.5, 10.5, fill=(255, 226, 170))
-    cv.ell(sx, sy, 7.8, 7.8, fill=(255, 245, 212))
-    for cy_, cw in ((h * 0.30, 60), (h * 0.36, 38), (h * 0.26, 24)):
-        cv.rrect(w * 0.62 - cw / 2, cy_, cw, 1.6, 0.8, fill=(255, 200, 150))
-    # Shenzhen skyline, two depth layers
-    rnd = random.Random(2026)
-    far = (170, 118, 160)
-    near = (104, 64, 118)
-    x = -4
+    cv.vgrad(0, 0, w, h, (206, 216, 230), (238, 240, 242))
+    # faint Shenzhen skyline, very low contrast
+    rnd = random.Random(1118)
+    hz = h * 0.80
+    x = -3
     while x < w:
-        bw = rnd.uniform(6, 14); bh = rnd.uniform(10, 26)
-        cv.rect(x, horizon - bh, bw, bh, fill=far)
-        x += bw + rnd.uniform(0, 3)
-    x = -2
-    while x < w:
-        bw = rnd.uniform(7, 16); bh = rnd.uniform(6, 20)
-        cv.rect(x, horizon - bh, bw, bh, fill=near)
-        for _ in range(int(bw * bh / 30)):
-            wx = x + rnd.uniform(1, max(1.2, bw - 2)); wy = horizon - bh + rnd.uniform(1.5, max(2, bh - 2))
-            cv.rect(wx, wy, 0.9, 0.9, fill=(255, 220, 150))
-        x += bw + rnd.uniform(0.5, 4)
-    px = w * 0.665
-    cv.poly([(px - 6, horizon), (px - 4.5, h * 0.16), (px - 1.2, h * 0.07), (px, h * 0.03), (px + 1.2, h * 0.07),
-             (px + 4.5, h * 0.16), (px + 6, horizon)], fill=near)
-    cv.line([(px, h * 0.03), (px, horizon)], (140, 96, 150), 0.6)
-    qx = w * 0.745
-    cv.poly([(qx - 4, horizon), (qx - 3, h * 0.25), (qx, h * 0.21), (qx + 3, h * 0.25), (qx + 4, horizon)], fill=near)
-    cv.rect(w * 0.60 - 3.5, h * 0.30, 7, horizon - h * 0.30, fill=near)
-    # apron
-    cv.rect(0, horizon, w, h - horizon, fill=(82, 84, 92))
-    cv.vgrad(0, horizon, w, 6, (60, 62, 70), (82, 84, 92))
-    cv.line([(0, horizon), (w, horizon)], (150, 150, 158), 0.5)
-    for i in range(0, int(w) + 10, 20):
-        cv.rect(i, h * 0.915, 11, 1.3, fill=(232, 200, 70))
-    cv.line([(0, h * 0.74), (w, h * 0.74)], (120, 122, 130), 0.5)
-    # red carpet
-    c0x, c1x = w * 0.60, w * 0.985
-    cv.poly([(c0x, h * 0.75), (c1x, h * 0.75), (c1x, h * 0.875), (c0x - 8, h * 0.875)], fill=(170, 28, 34))
-    cv.poly([(c0x, h * 0.75), (c1x, h * 0.75), (c1x, h * 0.764), (c0x - 0.5, h * 0.764)], fill=(200, 60, 66))
-    cv.poly([(c0x - 8, h * 0.875), (c1x, h * 0.875), (c1x, h * 0.861), (c0x - 7.2, h * 0.861)], fill=(120, 18, 24))
-    # flag line CN / US
-    for i in range(7):
-        fx = w * 0.655 + i * 15.5
-        cv.line([(fx, h * 0.75), (fx, h * 0.50)], (240, 240, 244), 0.8)
-        cv.ell(fx, h * 0.495, 0.8, 0.8, fill=(250, 220, 120))
-        flag(cv, fx + 0.6, h * 0.51, 8.5, 5.6, "cn" if i % 2 == 0 else "us")
-    # aircraft
-    nose_x = w * 0.585; tail_x = w * 0.045
-    cy = h * 0.49; fh = h * 0.075
-    L = nose_x - tail_x
-    white = (250, 251, 253); lblue = (150, 192, 232); dblue = (28, 62, 140); shade = (222, 226, 234)
-    body = [(tail_x + L * 0.11, cy - fh), (nose_x - L * 0.12, cy - fh), (nose_x - L * 0.04, cy - fh * 0.62),
-            (nose_x, cy + fh * 0.05), (nose_x - L * 0.03, cy + fh * 0.62), (nose_x - L * 0.10, cy + fh),
-            (tail_x + L * 0.16, cy + fh), (tail_x + L * 0.02, cy + fh * 0.15), (tail_x, cy - fh * 0.1)]
-    cv.poly(body, fill=white)
-    cv.poly([(tail_x + L * 0.16, cy + fh * 0.25), (nose_x - L * 0.06, cy + fh * 0.25), (nose_x - L * 0.03, cy + fh * 0.62),
-             (nose_x - L * 0.10, cy + fh), (tail_x + L * 0.16, cy + fh), (tail_x + L * 0.02, cy + fh * 0.15), (tail_x, cy - fh * 0.1),
-             (tail_x + L * 0.10, cy + fh * 0.25)], fill=lblue)
-    cv.poly([(tail_x + L * 0.10, cy + fh * 0.16), (nose_x - L * 0.16, cy + fh * 0.16), (nose_x - L * 0.09, cy - fh * 0.05),
-             (nose_x - L * 0.06, cy - fh * 0.2), (nose_x - L * 0.06, cy - fh * 0.02), (nose_x - L * 0.10, cy + fh * 0.30),
-             (tail_x + L * 0.10, cy + fh * 0.30)], fill=dblue)
-    cv.poly([(tail_x + L * 0.12, cy - fh * 0.95), (tail_x + L * 0.17, cy - fh * 3.6), (tail_x + L * 0.27, cy - fh * 3.6),
-             (tail_x + L * 0.30, cy - fh * 0.95)], fill=lblue)
-    cv.poly([(tail_x + L * 0.145, cy - fh * 3.1), (tail_x + L * 0.215, cy - fh * 3.1), (tail_x + L * 0.16, cy - fh * 1.25),
-             (tail_x + L * 0.125, cy - fh * 1.25)], fill=white)
-    flag(cv, tail_x + L * 0.225, cy - fh * 3.3, L * 0.045, fh * 0.9, "us")
-    cv.poly([(tail_x + L * 0.03, cy - fh * 0.2), (tail_x - L * 0.02, cy - fh * 1.0), (tail_x + L * 0.11, cy - fh * 1.0),
-             (tail_x + L * 0.19, cy - fh * 0.2)], fill=shade)
-    root0, root1 = tail_x + L * 0.42, tail_x + L * 0.62
-    cv.poly([(root0, cy + fh * 0.35), (root1, cy + fh * 0.35), (root1 - L * 0.26, cy + fh * 2.55),
-             (root1 - L * 0.36, cy + fh * 2.55)], fill=shade)
-    cv.line([(root0, cy + fh * 0.35), (root1 - L * 0.36, cy + fh * 2.55)], (190, 194, 204), 0.5)
-    cv.line([(root1, cy + fh * 0.35), (root1 - L * 0.26, cy + fh * 2.55)], (200, 204, 214), 0.4)
-    for ex, ey, s_ in ((root0 - L * 0.10, cy + fh * 1.75, 1.0), (root0 + L * 0.04, cy + fh * 1.15, 0.92)):
-        ew, eh = L * 0.13 * s_, fh * 1.05 * s_
-        cv.rrect(ex, ey, ew, eh, eh * 0.45, fill=(206, 210, 220))
-        cv.rrect(ex, ey, ew * 0.22, eh, eh * 0.45, fill=(70, 74, 84))
-        cv.line([(ex + ew * 0.1, ey + eh * 0.5), (ex + ew * 0.95, ey + eh * 0.5)], (170, 174, 186), 0.5)
-    for i in range(26):
-        wx = tail_x + L * (0.20 + i * 0.027)
-        if abs(wx - (nose_x - L * 0.16)) < L * 0.02 or abs(wx - (tail_x + L * 0.30)) < L * 0.015:
-            continue
-        cv.rect(wx, cy - fh * 0.55, 0.95, 1.05, fill=(52, 70, 110))
-    for doorx in (nose_x - L * 0.165, tail_x + L * 0.295):
-        cv.rect(doorx, cy - fh * 0.78, 2.3, fh * 1.45, outline=(170, 178, 200), width=0.35)
-    cv.poly([(nose_x - L * 0.085, cy - fh * 0.66), (nose_x - L * 0.03, cy - fh * 0.40), (nose_x - L * 0.07, cy - fh * 0.40),
-             (nose_x - L * 0.10, cy - fh * 0.52)], fill=(40, 56, 96))
-    cv.text(tail_x + L * 0.37, cy - fh * 0.98, "UNITED STATES OF AMERICA", SANS_B, 3.4, dblue)
-    for gx in (nose_x - L * 0.10, root1 - L * 0.02, root1 + L * 0.015):
-        cv.line([(gx, cy + fh), (gx, cy + fh * 2.6)], (60, 60, 66), 0.9)
-        cv.ell(gx, cy + fh * 2.75, 1.5, 1.5, fill=(28, 28, 32))
-        cv.ell(gx, cy + fh * 2.75, 0.6, 0.6, fill=(150, 150, 156))
-    cv.ell(tail_x + L * 0.52, cy + fh * 3.1, L * 0.45, fh * 0.5, fill=(66, 68, 76))
-    cv.poly(body, outline=(190, 196, 206), width=0.3)
-    # air stair
-    dx0 = nose_x - L * 0.155
-    top = (dx0 + 2.4, cy - fh * 0.1)
-    bot = (dx0 + 26, h * 0.75)
-    cv.poly([(top[0], top[1] - fh * 0.6), (top[0] + 3.5, top[1] - fh * 0.6), (bot[0] + 3.5, bot[1]), (bot[0] - 3.5, bot[1])], fill=(196, 198, 206))
-    cv.line([(top[0], top[1] - fh * 0.6), (bot[0] - 3.5, bot[1])], (120, 122, 130), 0.5)
-    for i in range(1, 9):
-        t = i / 9
-        sx0 = top[0] + (bot[0] - 3.5 - top[0]) * t
-        sy0 = top[1] - fh * 0.6 + (bot[1] - top[1] + fh * 0.6) * t
-        cv.line([(sx0, sy0), (sx0 + 3.5, sy0)], (140, 142, 150), 0.4)
-    cv.line([(top[0], top[1] - fh * 1.3), (bot[0] - 3.5, bot[1] - fh * 0.9)], (120, 122, 130), 0.6)
-    cv.line([(top[0] + 3.5, top[1] - fh * 1.3), (bot[0] + 3.5, bot[1] - fh * 0.9)], (120, 122, 130), 0.6)
-    # Xi and Trump embracing at the foot of the stairs
-    base = h * 0.85
-    ph = 15.5
-    person(cv, w * 0.690, base, ph, suit=(26, 28, 44), hair=(32, 30, 34), tie=(160, 24, 30), lean=0.5)
-    person(cv, w * 0.716, base, ph, suit=(22, 26, 48), hair=(228, 200, 120), tie=(200, 30, 36), lean=-0.5)
-    cv.line([(w * 0.690 - 1.2, base - ph * 0.68), (w * 0.716 + 1.4, base - ph * 0.60)], (26, 28, 44), 1.3)
-    cv.line([(w * 0.716 + 1.2, base - ph * 0.70), (w * 0.690 - 1.6, base - ph * 0.60)], (22, 26, 48), 1.3)
-    for fx in (0.80, 0.822, 0.844):
-        person(cv, w * fx, base - 0.5, 12.5, suit=(30, 32, 48), hair=(30, 28, 32))
-    for fx, fy in ((w * 0.645, h * 0.815), (w * 0.94, h * 0.80)):
-        cv.ell(fx, fy, 0.9, 0.9, fill=(255, 255, 240))
-    chip(cv, 5, h - 5, "SHENZHEN BAO'AN AIRPORT · WEDNESDAY MORNING", SANS_B, 7.5, top=True)
-    chip(cv, w - 5, 5, "APEC 2026 · SHENZHEN", SANS_B, 7.5, fg=(255, 255, 255), bg=(112, 48, 150), right=True)
+        bw = rnd.uniform(8, 22); bh = rnd.uniform(8, 30)
+        cv.rect(x, hz - bh, bw, bh, fill=(214, 220, 232))
+        x += bw + rnd.uniform(1, 5)
+    px = w * 0.19
+    cv.poly([(px - 5, hz), (px - 3.5, h * 0.22), (px, h * 0.12), (px + 3.5, h * 0.22), (px + 5, hz)], fill=(208, 215, 228))
+    # floor + red carpet runner
+    cv.vgrad(0, hz, w, h - hz, (222, 222, 224), (236, 236, 236))
+    cv.line([(0, hz), (w, hz)], (200, 202, 208), 0.6)
+    cv.poly([(w * 0.30, hz + 1), (w * 0.70, hz + 1), (w * 0.76, h), (w * 0.24, h)], fill=(168, 38, 46))
+    cv.poly([(w * 0.31, hz + 1), (w * 0.69, hz + 1), (w * 0.75, h), (w * 0.25, h)], fill=(182, 44, 52))
+    # figures and flags, same baseline
+    base = h * 0.93
+    H = h * 0.86
+    cx = w * 0.5
+    sep = H * 0.30
+    flag_on_pole(cv, cx - sep - H * 0.52, base, H * 1.02, "us", +1)
+    flag_on_pole(cv, cx + sep + H * 0.52, base, H * 1.02, "cn", -1)
+    portrait(cv, cx - sep, base, H, hair=(226, 196, 120), tie=(196, 30, 40), suit=(30, 34, 54), skin=(236, 198, 166), hair_style="swept")
+    portrait(cv, cx + sep, base, H, hair=(34, 30, 32), tie=(120, 24, 40), suit=(28, 30, 44), skin=(228, 192, 156), hair_style="side")
     return cv
 
 
 def art_gulf(w, h):
     sea = (12, 30, 62)
     cv = Canvas(w, h, bg=sea)
-    proj = project((40.5, 23.8, 61.5, 31.6), (0, 0, w, h))
+    proj = project((43.5, 23.5, 59.5, 32.2), (0, 0, w, h))
     land = (62, 78, 104)
-    # graticule every 2 degrees
-    for lon in range(40, 64, 2):
-        cv.line([proj(lon, 23), proj(lon, 32.5)], (20, 42, 78), 0.4)
+    for lon in range(44, 60, 2):
+        cv.line([proj(lon, 23), proj(lon, 33)], (20, 42, 78), 0.4)
     for lat in range(24, 33, 2):
-        cv.line([proj(40, lat), proj(62, lat)], (20, 42, 78), 0.4)
+        cv.line([proj(43, lat), proj(60, lat)], (20, 42, 78), 0.4)
     for name in ("Iraq", "Iran", "Saudi Arabia", "Kuwait", "Bahrain", "Qatar", "United Arab Emirates", "Oman", "Yemen"):
         draw_polys(cv, REGIONS[name], proj, land, outline=(90, 108, 140), width=0.5)
     draw_polys(cv, REGIONS["Kuwait"], proj, (118, 96, 60), outline=(200, 170, 110), width=0.6)
     draw_polys(cv, REGIONS["Iran"], proj, (84, 72, 86), outline=(120, 108, 130), width=0.5)
     lab = (178, 196, 222)
-    cv.text(*proj(43.5, 30.5), "IRAQ", SANS_B, 8.5, lab)
-    cv.text(*proj(53.6, 30.9), "IRAN", SANS_B, 9.5, (230, 220, 240))
-    cv.text(*proj(41.4, 24.9), "SAUDI ARABIA", SANS_B, 8.5, lab)
-    cv.text(*proj(50.3, 29.4), "THE GULF", SANS_B, 8, (120, 150, 200))
-    cv.text(*proj(55.3, 25.4), "STRAIT OF HORMUZ", SANS_B, 6.5, (120, 150, 200))
-    for lon, lat, nm in ((47.98, 29.37, "Kuwait City"), (51.53, 25.29, "Doha")):
-        if nm:
-            x_, y_ = proj(lon, lat)
-            cv.ell(x_, y_, 1.3, 1.3, fill=(200, 212, 235))
-            cv.text(x_ + 3, y_ - 4, nm, SANS, 6, (190, 204, 230))
-    # Ali Al Salem, Kuwait
+    cv.tracked(*proj(44.2, 31.6), "Iraq", 6.5, lab, tracking=0.8)
+    cv.tracked(*proj(52.6, 31.2), "Iran", 7.5, (230, 220, 240), tracking=1.0)
+    cv.tracked(*proj(44.0, 25.0), "Saudi Arabia", 6.5, lab, tracking=0.8)
     kx, ky = proj(47.52, 29.35)
-    burst(cv, kx, ky, 8, (255, 120, 40))
-    burst(cv, kx, ky, 4.5, (255, 230, 120))
-    chip(cv, kx + 7, ky - 2, "ALI AL SALEM AIR BASE · KUWAIT", SANS_B, 8, fg=(255, 255, 255), bg=(196, 86, 20))
-    # Qeshm
+    burst(cv, kx, ky, 7, (255, 120, 40))
+    burst(cv, kx, ky, 3.8, (255, 230, 120))
+    cv.tracked(kx + 8, ky - 3, "Kuwait", 6.5, (255, 255, 255), tracking=0.8)
     qx, qy = proj(56.27, 26.8)
-    burst(cv, qx, qy, 7, (255, 255, 255))
-    burst(cv, qx, qy, 3.5, (255, 90, 60))
-    chip(cv, qx - 8, qy - 12, "US STRIKE · QESHM ISLAND", SANS_B, 8, fg=INK, bg=(255, 255, 255), right=True)
-    # Bahrain intercepted
+    burst(cv, qx, qy, 6, (255, 255, 255))
+    burst(cv, qx, qy, 3, (255, 90, 60))
+    cv.tracked(qx - 2, qy + 5, "Qeshm", 6.5, (255, 255, 255), tracking=0.8, anchor="r")
     bx, by = proj(50.55, 26.1)
-    cv.ell(bx, by, 4.5, 4.5, outline=(255, 255, 255), width=1.2)
-    cv.ell(bx, by, 1.6, 1.6, fill=(255, 255, 255))
-    chip(cv, bx - 7, by + 6, "BAHRAIN: 3RD ATTACK IN A WEEK", SANS_B, 7.5, fg=(255, 255, 255), bg=(40, 60, 100), right=True)
-    # drone arcs Iran -> Kuwait
+    cv.ell(bx, by, 3.8, 3.8, outline=(255, 255, 255), width=1.0)
+    cv.ell(bx, by, 1.3, 1.3, fill=(255, 255, 255))
+    cv.tracked(bx - 5, by - 3, "Bahrain", 6.5, (255, 255, 255), tracking=0.8, anchor="r")
     ix, iy = proj(50.6, 30.3)
-    mid = ((ix + kx) / 2, min(iy, ky) - 7)
+    mid = ((ix + kx) / 2, min(iy, ky) - 6)
     pts = []
     for i in range(21):
         t = i / 20
-        x = (1 - t) ** 2 * ix + 2 * (1 - t) * t * mid[0] + t ** 2 * kx
-        y = (1 - t) ** 2 * iy + 2 * (1 - t) * t * mid[1] + t ** 2 * ky
-        pts.append((x, y))
+        pts.append(((1 - t) ** 2 * ix + 2 * (1 - t) * t * mid[0] + t ** 2 * kx,
+                    (1 - t) ** 2 * iy + 2 * (1 - t) * t * mid[1] + t ** 2 * ky))
     for i in range(0, 20, 2):
-        cv.line([pts[i], pts[i + 1]], (255, 170, 90), 1.3)
-    drone(cv, pts[8][0], pts[8][1] - 1, 4, (255, 210, 150))
-    drone(cv, pts[12][0] + 3, pts[12][1] + 4, 3.2, (255, 210, 150))
-    # US -> Qeshm arrow from the sea
-    cv.dashed((qx + 30, qy + 26), (qx + 4, qy + 4), (255, 255, 255), 1.1, 3, 2.5)
-    cv.text(6, 5, "THE GULF · 18 NOV", SANS_B, 7.5, (150, 175, 210))
+        cv.line([pts[i], pts[i + 1]], (255, 170, 90), 1.2)
+    drone(cv, pts[9][0], pts[9][1] - 1, 3.2, (255, 210, 150))
+    cv.dashed((qx + 22, qy + 20), (qx + 3, qy + 3), (255, 255, 255), 1.0, 2.5, 2)
     return cv
 
 
 def art_voyager(w, h):
     cv = Canvas(w, h, bg=(8, 10, 32))
     rnd = random.Random(11)
-    for _ in range(120):
+    for _ in range(90):
         x, y = rnd.random() * w, rnd.random() * h
-        r = rnd.choice((0.5, 0.6, 0.8, 1.1))
-        c = rnd.choice(((255, 255, 255), (200, 210, 255), (255, 240, 220)))
-        cv.ell(x, y, r, r, fill=c)
-    # faint diagonal Milky Way band (soft gradient of slanted strips)
-    bg = (8, 10, 32)
-    peak = (26, 28, 66)
-    n = 36
+        r = rnd.choice((0.4, 0.5, 0.7, 0.9))
+        cv.ell(x, y, r, r, fill=rnd.choice(((255, 255, 255), (200, 210, 255), (255, 240, 220))))
+    bg = (8, 10, 32); peak = (26, 28, 66); n = 30
     for i in range(n):
-        t = i / (n - 1)
-        k = 1 - abs(t - 0.5) * 2
+        t = i / (n - 1); k = 1 - abs(t - 0.5) * 2
         c = tuple(round(bg[j] + (peak[j] - bg[j]) * k) for j in range(3))
-        off = (t - 0.5) * w * 0.34
-        cx0 = w * 0.47 + off
-        cv.poly([(cx0 - w * 0.012 - h * 0.35, h + 2), (cx0 + w * 0.012 - h * 0.35, h + 2),
-                 (cx0 + w * 0.012 + h * 0.35, -2), (cx0 - w * 0.012 + h * 0.35, -2)], fill=c)
+        off = (t - 0.5) * w * 0.5
+        cx0 = w * 0.55 + off
+        cv.poly([(cx0 - w * 0.02 - h * 0.45, h + 2), (cx0 + w * 0.02 - h * 0.45, h + 2),
+                 (cx0 + w * 0.02 + h * 0.45, -2), (cx0 - w * 0.02 + h * 0.45, -2)], fill=c)
     rnd2 = random.Random(23)
-    for _ in range(160):
-        t = rnd2.random()
-        y_ = rnd2.random() * h
-        x_ = w * 0.47 + (t - 0.5) * w * 0.30 + (h / 2 - y_) * 0.7 * 1.0
-        cv.ell(x_, y_, 0.35, 0.35, fill=(150, 156, 205))
-    # earth
-    ex, ey, er = w * 0.13, h * 0.74, h * 0.20
+    for _ in range(110):
+        t = rnd2.random(); y_ = rnd2.random() * h
+        cv.ell(w * 0.55 + (t - 0.5) * w * 0.4 + (h / 2 - y_) * 0.9, y_, 0.3, 0.3, fill=(150, 156, 205))
+    ex, ey, er = w * 0.2, h * 0.78, h * 0.17
     cv.ell(ex, ey, er * 1.25, er * 1.25, fill=(26, 60, 120))
     cv.ell(ex, ey, er, er, fill=(50, 120, 220))
     cv.ell(ex - er * 0.35, ey - er * 0.35, er * 0.42, er * 0.3, fill=(70, 180, 110))
     cv.ell(ex + er * 0.3, ey + er * 0.2, er * 0.35, er * 0.45, fill=(70, 180, 110))
     cv.ell(ex - er * 0.1, ey + er * 0.5, er * 0.25, er * 0.15, fill=(240, 250, 255))
-    cv.ell(ex - er * 0.45, ey + er * 0.05, er * 0.18, er * 0.1, fill=(240, 250, 255))
-    # night-side terminator (soft) and a sun glint
     cv.d.chord([(ex - er) * SS, (ey - er) * SS, (ex + er) * SS, (ey + er) * SS], 318, 42, fill=(30, 78, 160))
-    cv.d.chord([(ex - er) * SS, (ey - er) * SS, (ex + er) * SS, (ey + er) * SS], 332, 28, fill=(24, 62, 136))
     cv.ell(ex - er * 0.5, ey - er * 0.58, er * 0.15, er * 0.09, fill=(255, 255, 255))
-    cv.text(ex + er * 1.3, ey + er * 0.55, "EARTH", SANS_B, 8, (210, 220, 255))
-    # trajectory
-    vx, vy = w * 0.86, h * 0.27
-    cv.dashed((ex + er * 0.7, ey - er * 0.7), (vx - 14, vy + 4), (160, 175, 240), 1.0, 3, 3)
-    # voyager: dish + bus + boom
+    vx, vy = w * 0.80, h * 0.24
+    cv.dashed((ex + er * 0.7, ey - er * 0.7), (vx - 10, vy + 5), (160, 175, 240), 0.9, 2.5, 2.5)
     ang = math.atan2(vy - ey, vx - ex)
-    cv.ell(vx, vy, 13, 13, outline=(235, 238, 248), width=1.6)
-    cv.ell(vx, vy, 9.5, 9.5, fill=(60, 64, 90), outline=(235, 238, 248), width=1.0)
-    cv.ell(vx, vy, 3.2, 3.2, fill=(235, 238, 248))
-    cv.line([(vx, vy), (vx - 9 * math.cos(ang), vy - 9 * math.sin(ang))], (235, 238, 248), 1.2)
-    cv.rect(vx + 10, vy - 4, 7, 8, fill=(190, 194, 210))
-    cv.line([(vx + 17, vy), (vx + 36, vy - 10)], (200, 204, 220), 1.1)
-    cv.line([(vx + 17, vy + 2), (vx + 32, vy + 12)], (200, 204, 220), 1.1)
-    cv.rect(vx + 30, vy + 10, 6, 4, fill=(120, 124, 140))
-    cv.rtext(vx - 18, vy - 12, "VOYAGER 1", SANS_B, 9, (255, 255, 255))
-    cv.rtext(vx - 18, vy - 1, "launched 1977", SANS, 7.5, (180, 190, 230))
-    # dimension bracket
-    y0 = h * 0.60
-    x0, x1 = ex + er + 10, w * 0.76
-    cv.line([(x0, y0 - 4), (x0, y0 + 4)], GOLD, 1)
-    cv.line([(x1, y0 - 4), (x1, y0 + 4)], GOLD, 1)
-    cv.line([(x0, y0), (x1, y0)], GOLD, 1)
-    cv.ctext((x0 + x1) / 2, y0 + 5, "1 LIGHT-DAY  ·  25.9 BILLION KM", SANS_B, 9.5, GOLD)
-    cv.ctext((x0 + x1) / 2, y0 + 17, "a radio command sent today arrives tomorrow", SANS, 7.5, (210, 216, 245))
-    cv.text(6, 5, "10:16 UTC · 18 NOV 2026", SANS_B, 7.5, (160, 170, 215))
+    cv.ell(vx, vy, 9, 9, outline=(235, 238, 248), width=1.3)
+    cv.ell(vx, vy, 6.5, 6.5, fill=(60, 64, 90), outline=(235, 238, 248), width=0.9)
+    cv.ell(vx, vy, 2.2, 2.2, fill=(235, 238, 248))
+    cv.line([(vx, vy), (vx - 6 * math.cos(ang), vy - 6 * math.sin(ang))], (235, 238, 248), 1.0)
+    cv.rect(vx + 7, vy - 3, 5, 6, fill=(190, 194, 210))
+    cv.line([(vx + 12, vy), (vx + 24, vy - 7)], (200, 204, 220), 0.9)
+    cv.line([(vx + 12, vy + 2), (vx + 22, vy + 9)], (200, 204, 220), 0.9)
+    y0 = h * 0.64
+    x0, x1 = ex + er + 8, w * 0.90
+    cv.line([(x0, y0 - 3), (x0, y0 + 3)], GOLD, 0.9)
+    cv.line([(x1, y0 - 3), (x1, y0 + 3)], GOLD, 0.9)
+    cv.line([(x0, y0), (x1, y0)], GOLD, 0.9)
+    cv.tracked((x0 + x1) / 2, y0 + 5, "1 light-day", 7, GOLD, tracking=1.0, anchor="m")
+    cv.tracked((x0 + x1) / 2, y0 + 15, "25.9 billion km", 6.5, (230, 232, 250), tracking=0.8, anchor="m")
+    cv.tracked(vx - 12, vy - 14, "Voyager 1", 6.5, (255, 255, 255), tracking=0.8, anchor="r")
     return cv
 
 
@@ -750,7 +696,7 @@ def art_horn(w, h):
     return cv
 
 
-ART = {"apec": art_apec, "gulf": art_gulf, "voyager": art_voyager, "eu": art_eu,
+ART = {"apec": art_lead, "gulf": art_gulf, "voyager": art_voyager, "eu": art_eu,
        "drones": art_drones, "senate": art_senate, "climate": art_cop, "inflation": art_inflation,
        "cyclone": art_cyclone, "elobeid": art_sudan, "gold": art_gold, "gta": art_gta,
        "horn": art_horn}
@@ -767,9 +713,9 @@ def kicker(cv, x, y, w, n, c, label, src=None, nsize=15, ksize=10):
     r = nsize / 2
     cv.ell(x + r, y + r, r, r, fill=c)
     cv.ctext(x + r, y + r - nsize * 0.40, str(n), SANS_B, nsize * 0.62, (255, 255, 255))
-    cv.text(x + nsize + 5, y + r - ksize * 0.68, label, SANS_B, ksize, c)
+    cv.tracked(x + nsize + 5, y + r - ksize * 0.62, label, ksize * 0.92, c, tracking=1.4)
     if src:
-        cv.rtext(x + w, y + r - 9 * 0.68, src, SANS, 9, GREY)
+        cv.tracked(x + w, y + r - 8 * 0.62, src, 7.5, GREY, tracking=1.2, anchor="r")
 
 
 def place_dots():
@@ -795,15 +741,15 @@ def main():
     meta = DATA["meta"]
 
     # ---- masthead
-    cv.text(X0, 11, meta["kicker_left"], SANS_B, 13, RED)
-    cv.rtext(X1, 11.5, meta["kicker_right"], SANS_B, 12, INK)
+    cv.tracked(X0, 12, meta["kicker_left"], 11.5, RED, tracking=2.2)
+    cv.tracked(X1, 12.5, meta["kicker_right"], 10.5, INK, tracking=2.0, anchor="r")
     cv.line([(X0, 29), (X1, 29)], INK, 0.8)
     title = meta["masthead"]
     for sz in (62, 60, 58, 56, 54):
         if cv.tw(title, DISPLAY, sz) <= CW:
             break
     cv.text(X0 - 2, 31, title, DISPLAY, sz, INK)
-    cv.text(X0, 101, meta["subline"], GAR_I, 16, (40, 40, 44))
+    cv.text(X0, 102, meta["subline"], BODY_I, 14.5, (40, 40, 44))
     cv.line([(X0, 123), (X1, 123)], INK, 2.2)
 
     # ---- region strip
@@ -813,23 +759,41 @@ def main():
     for c in DATA["continents"]:
         wdt = CW * c["w"] / total
         cv.rect(sx, sy, wdt - 1.5, 19, fill=col(c["color"]))
-        cv.ctext(sx + wdt / 2, sy + 3.2, f'{c["name"]} {c["count"]}', SANS_B, 9.5, (255, 255, 255))
+        cv.tracked(sx + wdt / 2, sy + 4.2, f'{c["name"]} {c["count"]}', 8.6, (255, 255, 255), tracking=1.5, anchor="m")
         sx += wdt
 
-    # ---- heroes
-    HY, AH = 154, 118
+    # ---- hero zone: lead (60%) + two stacked heroes (40%)
+    HY, HB = 154, 391
     gap = 12
-    hw = (CW - 2 * gap) / 3
-    for i, st in enumerate(DATA["heroes"]):
-        hx = X0 + i * (hw + gap)
-        art = ART[st["art"]](hw, AH)
-        soft_shadow(cv, hx, HY, hw, AH)
-        cv.paste(art, hx, HY)
-        cv.rect(hx, HY, hw, AH, outline=INK, width=1.2)
+    LW = round((CW - gap) * 0.6)
+    RX = X0 + LW + gap
+    RW = X1 - RX
+    heroes = DATA["heroes"]
+    # lead
+    lead = heroes[0]
+    LAH = 114
+    soft_shadow(cv, X0, HY, LW, LAH)
+    cv.paste(art_lead(LW, LAH), X0, HY)
+    cv.rect(X0, HY, LW, LAH, outline=INK, width=1.2)
+    c = col(lead["color"])
+    kicker(cv, X0, HY + LAH + 7, LW, lead["n"], c, lead["cat"], lead.get("source"))
+    used = cv.fit(X0, HY + LAH + 26, LW, lead["headline"], HEAD, [26, 25, 24, 23, 22], 1.08, 2)
+    cv.fit(X0, HY + LAH + 26 + used + 5, LW, lead["dek"], BODY, [12, 11.5, 11], 1.28, 3, (36, 36, 40))
+    # stacked heroes
+    RH = (HB - HY - gap) / 2
+    AW = 150
+    for i, st in enumerate(heroes[1:]):
+        y = HY + i * (RH + gap)
+        art = ART[st["art"]](AW, RH)
+        soft_shadow(cv, RX, y, AW, RH)
+        cv.paste(art, RX, y)
+        cv.rect(RX, y, AW, RH, outline=INK, width=1.0)
+        tx = RX + AW + 10
+        tw = X1 - tx
         c = col(st["color"])
-        kicker(cv, hx, HY + AH + 7, hw, st["n"], c, st["cat"], st.get("source"))
-        used = cv.fit(hx, HY + AH + 26, hw, st["headline"], PF_XB, [21, 20, 19, 18], 1.12, 2)
-        cv.fit(hx, HY + AH + 26 + used + 4, hw, st["dek"], GAR_M, [13.5, 13, 12.5], 1.22, 3, (36, 36, 40))
+        kicker(cv, tx, y + 1, tw, st["n"], c, st["cat"], st.get("source"), nsize=13, ksize=9)
+        used = cv.fit(tx, y + 20, tw, st["headline"], HEAD, [16, 15.5, 15, 14.5, 14], 1.1, 3)
+        cv.fit(tx, y + 20 + used + 4, tw, st["dek"], BODY, [10.5, 10, 9.5], 1.25, 3, (36, 36, 40))
 
     # ---- grid rows
     def row(y, items):
@@ -842,8 +806,8 @@ def main():
             cv.rect(gx, y, gw, 58, outline=INK, width=1.0)
             c = col(st["color"])
             kicker(cv, gx, y + 63, gw, st["n"], c, st["cat"], nsize=13, ksize=9)
-            used = cv.fit(gx, y + 79, gw, st["headline"], PF_B, [14, 13.5, 13, 12.5], 1.12, 2)
-            cv.fit(gx, y + 79 + used + 3, gw, st["dek"], GAR_M, [11.5, 11, 10.5], 1.2, 2, (40, 40, 44))
+            used = cv.fit(gx, y + 79, gw, st["headline"], HEAD, [14, 13.5, 13, 12.5], 1.12, 2)
+            cv.fit(gx, y + 79 + used + 3, gw, st["dek"], BODY, [10.5, 10, 9.5], 1.22, 2, (40, 40, 44))
 
     cv.line([(X0, 397), (X1, 397)], RULE, 0.6)
     row(404, DATA["grid"][:5])
@@ -853,8 +817,8 @@ def main():
     # ---- also section
     AY = 702
     cv.line([(X0, AY), (X1, AY)], INK, 2.2)
-    cv.text(X0, AY + 5, meta["also_line"], SANS_B, 12.5, INK)
-    cv.rtext(X1, AY + 6, "26 MORE STORIES · NUMBERS 14–39 ON THE MAP", SANS_B, 9, GREY)
+    cv.tracked(X0, AY + 6, meta["also_line"], 11, INK, tracking=2.0)
+    cv.tracked(X1, AY + 8, "26 more stories · numbers 14–39 on the map", 7.5, GREY, tracking=1.4, anchor="r")
     BY = AY + 26
 
     # map
@@ -905,8 +869,8 @@ def main():
             cv.line([(sx + 2, yy + 2), (sx + 2, yy + sh - 4)], RULE, 0.7)
         if i < 2:
             cv.line([(sx + (0 if i % 2 == 0 else 10), yy + sh), (sx + sw - 8, yy + sh)], RULE, 0.7)
-        cv.text(tx, yy - 7, s["big"], DMS_I, 26, INK)
-        cv.fit(tx, yy + 24, tw, s["label"], GAR_M, [9.5, 9], 1.1, 2, (50, 50, 54))
+        cv.text(tx, yy - 4, s["big"], HEAD, 24, INK)
+        cv.fit(tx, yy + 25, tw, s["label"], LABEL_R, [8.5, 8], 1.2, 2, (50, 50, 54))
 
     # index: two columns
     IX = MX + MW + 14
@@ -915,14 +879,14 @@ def main():
     items = DATA["list"]
     colA, colB = items[:13], items[13:]
     avail = (SY + 2 * sh + 4) - BY
-    for sz in (12.5, 12, 11.5, 11, 10.5):
+    for sz in (11, 10.5, 10, 9.5):
         rowh = sz * 1.2 + 3.4
 
         def needs(coll):
             tot = 0
             for it in coll:
                 full = it["place"] + ": " + it["text"]
-                tot += len(cv.wrap(full, GAR_M, sz, ICW - 20)) * sz * 1.2 + 3.4
+                tot += len(cv.wrap(full, BODY, sz, ICW - 20)) * sz * 1.25 + 3.4
             return tot
         if max(needs(colA), needs(colB)) <= avail:
             break
@@ -936,15 +900,15 @@ def main():
             cv.ell(cx + 7, yy + sz * 0.62, 7, 7, fill=c)
             cv.ctext(cx + 7, yy + sz * 0.62 - 4.3, str(it["n"]), SANS_B, 7.5, (255, 255, 255))
             place = it["place"] + ":"
-            lines = cv.wrap(place + " " + it["text"], GAR_M, sz, ICW - 20)
+            lines = cv.wrap(place + " " + it["text"], BODY, sz, ICW - 20)
             ly = yy
             for li, ln in enumerate(lines):
                 if li == 0 and ln.startswith(place):
-                    cv.text(cx + 19, ly, place, GAR_SB, sz, INK)
-                    cv.text(cx + 19 + cv.tw(place, GAR_SB, sz), ly, ln[len(place):], GAR_M, sz, (30, 30, 34))
+                    cv.text(cx + 19, ly, place, BODY_B, sz, INK)
+                    cv.text(cx + 19 + cv.tw(place, BODY_B, sz), ly, ln[len(place):], BODY, sz, (30, 30, 34))
                 else:
-                    cv.text(cx + 19, ly, ln, GAR_M, sz, (30, 30, 34))
-                ly += sz * 1.2
+                    cv.text(cx + 19, ly, ln, BODY, sz, (30, 30, 34))
+                ly += sz * 1.25
             yy = ly + 3.4 + extra
         if ci == 0:
             cv.line([(cx + ICW + 7, BY), (cx + ICW + 7, SY + 2 * sh)], RULE, 0.6)

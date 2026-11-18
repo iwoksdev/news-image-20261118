@@ -49,6 +49,13 @@ Live standings (updates as entries arrive):
   Senate card; Bay of Bengal graticule + Visakhapatnam/Chennai; Horn cities
   + Red Sea; world-map graticule + sea gradient; soft panel shadows.
 
+- Hero-zone pass: two-column hero (lead APEC story at 60% width with a
+  two-figure Trump/Xi illustration beside correct US and Chinese flags on a
+  shared ground line; Iran-war and Voyager heroes stacked at 40%, one
+  12 px gutter, edges aligned); NYT three-font system (Playfair Display
+  headlines, PT Serif deks/index, Inter Bold tracked caps for labels);
+  headlines rewritten as specific hooks and deks as complete sentences.
+
 ## Ranked ideas (remaining)
 
 ### 1. Hero art polish
