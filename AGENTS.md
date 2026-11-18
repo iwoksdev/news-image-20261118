@@ -37,12 +37,19 @@ is already submitted and every change must keep it valid.
 
 ## Rendering
 
-- PIL/matplotlib only. Headless Chromium does not work in this sandbox.
-- `render_square.py` draws at 2× and downscales with Lanczos to 1024.
-- Fonts: Noto Serif for headlines, Noto Sans for body (check `fc-list`).
-  No external resources, no web fonts — everything inline/self-contained.
-- The world map is drawn from polygon coordinates in the code
-  (no external geojson in this repo).
+- PIL only (`pip install pillow`). Headless Chromium does not work in this
+  sandbox.
+- `render_square.py` draws at 3× and downscales with Lanczos to 1024. It is
+  deterministic (seeded RNG for stars/skylines) — rendering twice gives the
+  same bytes.
+- All page text lives in `stories.json`; edit text there, not in the renderer.
+  `fit()` prints a `WARNING overflow` line if a headline/dek needs more lines
+  than its slot — shorten the text until the render is warning-free.
+- Fonts come from `./fonts` (OFL: Noto Serif/Sans static instances, Playfair
+  Display Black for the masthead). No system fonts, no web fonts.
+- Maps are drawn from `world_110m.json` (world) and `regions_50m.json`
+  (country shapes for the insets) — Natural Earth, public domain. Each art
+  panel is drawn on its own sub-canvas, so map polygons clip to the panel.
 
 ## What NOT to do
 

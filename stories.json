@@ -1,1 +1,422 @@
-{"continents": [{"color": "#6a3fa0", "count": 10, "name": "ASIA", "w": 300}, {"color": "#cf6f1f", "count": 3, "name": "MIDDLE EAST", "w": 130}, {"color": "#1f4e9c", "count": 6, "name": "EUROPE", "w": 200}, {"color": "#2e7d46", "count": 5, "name": "AFRICA", "w": 170}, {"color": "#c0392b", "count": 7, "name": "AMERICAS", "w": 230}, {"color": "#0e7c7b", "count": 5, "name": "OCEANIA", "w": 170}, {"color": "#555555", "count": 2, "name": "GLOBAL", "w": 110}, {"color": "#111111", "count": 1, "name": "SPACE", "w": 98}], "grid": [{"art": "eu", "cat": "EUROPE · UKRAINE AID", "color": "#1f4e9c", "dek": "Repayment waits until Russia pays war reparations, von der Leyen says.", "headline": "EU proposes a €45bn loan for Ukraine in 2027", "n": 4}, {"art": "drones", "cat": "EUROPE · UKRAINE WAR", "color": "#1f4e9c", "dek": "126 downed, Kyiv says; strikes on Odesa kill four.", "headline": "Russia fires 141 drones at Ukraine", "n": 5}, {"art": "senate", "cat": "AMERICAS · US POLITICS", "color": "#c0392b", "dek": "AP calls it for Mary Peltola over Dan Sullivan.", "headline": "Democrats take Alaska; Senate 56–44", "n": 6}, {"art": "climate", "cat": "GLOBAL · CLIMATE", "color": "#555555", "dek": "Fossil-fuel wording and a $120bn finance goal divide the room.", "headline": "Draft deal splits COP31 talks in Antalya", "n": 7}, {"art": "inflation", "cat": "EUROPE · ECONOMY", "color": "#1f4e9c", "dek": "Energy drives both; UK core holds at 2.8%.", "headline": "Inflation climbs: UK 3.6%, euro area 4.0%", "n": 8}, {"art": "cyclone", "cat": "ASIA · WEATHER", "color": "#6a3fa0", "dek": "Rescuers on standby; landfall due 20 November.", "headline": "India braces for Cyclone Akvan", "n": 9}, {"art": "elobeid", "cat": "AFRICA · SUDAN WAR", "color": "#2e7d46", "dek": "It urges a war-crimes probe of nine strikes.", "headline": "Amnesty: RSF drones killed 37 in El Obeid", "n": 10}, {"art": "gold", "cat": "GLOBAL · MARKETS", "color": "#555555", "dek": "Fed officials signal more rate rises.", "headline": "Gold falls below $3,800, a 14-month low", "n": 11}, {"art": "gta", "cat": "OCEANIA · CULTURE", "color": "#0e7c7b", "dek": "13 years after GTA V; launch rolls west from 11:00 GMT.", "headline": "GTA VI unlocks first in New Zealand", "n": 12}, {"art": "horn", "cat": "AFRICA · HORN OF AFRICA", "color": "#2e7d46", "dek": "Reuters: both armies gather; no clashes confirmed.", "headline": "Ethiopia and Eritrea mass troops on the border", "n": 13}], "heroes": [{"art": "apec", "cat": "ASIA · APEC SUMMIT", "color": "#6a3fa0", "dek": "The two men hug at the airport; Trump shakes hands with Putin at the banquet, and the first three-way talks are set for Thursday.", "headline": "Xi meets Trump on the tarmac as APEC opens in Shenzhen", "n": 1, "source": "AFP · AP"}, {"art": "gulf", "cat": "MIDDLE EAST · IRAN WAR", "color": "#cf6f1f", "dek": "Tehran calls it payback for the US strike on Qeshm. Kuwait says its defences held; Bahrain turns back another wave.", "headline": "Iran claims drone hits on a US air base in Kuwait", "n": 2, "source": "REUTERS"}, {"art": "voyager", "cat": "SPACE · SCIENCE", "color": "#111111", "dek": "At 10:16 UTC it passed 25.9bn km. A command sent today arrives tomorrow.", "headline": "Voyager 1, first craft one light-day from Earth", "n": 3, "source": "NASA"}], "list": [{"color": "#c0392b", "n": 14, "place": "Washington", "text": "Democrats nominate Jeffries for speaker, 251–11"}, {"color": "#6a3fa0", "n": 15, "place": "Seoul", "text": "Kospi jumps 2.7% as Asian chip stocks rally"}, {"color": "#6a3fa0", "n": 16, "place": "Shenzhen", "text": "Xi backs US–North Korea talks in meeting with Lee"}, {"color": "#6a3fa0", "n": 17, "place": "Shenzhen", "text": "Japan's Takaichi makes first China visit as PM"}, {"color": "#6a3fa0", "n": 18, "place": "Shenzhen", "text": "Trump announces Philippine trade deal, no terms"}, {"color": "#cf6f1f", "n": 19, "place": "Yemen", "text": "Saudi-led coalition says it hit 60 Houthi sites"}, {"color": "#cf6f1f", "n": 20, "place": "Israel", "text": "Katz: troops stay in Lebanon, Syria, Gaza zones"}, {"color": "#6a3fa0", "n": 21, "place": "Dhaka", "text": "troops deployed as unrest over Hasina grows"}, {"color": "#6a3fa0", "n": 22, "place": "Jakarta", "text": "Bank Indonesia raises rates to 6.00%"}, {"color": "#6a3fa0", "n": 23, "place": "Kashmir", "text": "top LeT commander killed in Kulgam"}, {"color": "#6a3fa0", "n": 24, "place": "Myanmar", "text": "junta to “review” its ties with ASEAN"}, {"color": "#2e7d46", "n": 25, "place": "Sudan", "text": "army advances to within 60 km of Al Nuhud"}, {"color": "#2e7d46", "n": 26, "place": "South Africa", "text": "inflation rises to 5.2%"}, {"color": "#2e7d46", "n": 27, "place": "Uganda", "text": "EACOP oil pipeline fast-tracked"}, {"color": "#1f4e9c", "n": 28, "place": "Berlin", "text": "coalition cuts electricity tax to EU minimum"}, {"color": "#1f4e9c", "n": 29, "place": "Romania", "text": "M5.7 Vrancea quake; two lightly hurt"}, {"color": "#1f4e9c", "n": 30, "place": "Turin", "text": "Alcaraz beats Medvedev at the ATP Finals"}, {"color": "#c0392b", "n": 31, "place": "New York", "text": "Anthropic prices its IPO; trading starts Thursday"}, {"color": "#c0392b", "n": 32, "place": "Santiago", "text": "ECLAC: Latin American poverty falls to 24.4%"}, {"color": "#c0392b", "n": 33, "place": "Chile", "text": "economy shrinks 1.1% in the third quarter"}, {"color": "#c0392b", "n": 34, "place": "Peru", "text": "M6.0 quake offshore; no damage reported"}, {"color": "#c0392b", "n": 35, "place": "Bogotá", "text": "Hegseth visits to deepen military ties"}, {"color": "#0e7c7b", "n": 36, "place": "Australia", "text": "wages rise 1.1%; settler groups sanctioned"}, {"color": "#0e7c7b", "n": 37, "place": "Fiji", "text": "national drought disaster declared"}, {"color": "#0e7c7b", "n": 38, "place": "Cook Islands", "text": "Cyclone Xavier holds at Category 5"}, {"color": "#0e7c7b", "n": 39, "place": "Hobart", "text": "England beat Australia to win ODI series 2–1"}], "map_dots": [{"color": "#6a3fa0", "lat": 22.54, "lon": 114.06, "n": 1}, {"color": "#cf6f1f", "lat": 29.31, "lon": 47.48, "n": 2}, {"color": "#1f4e9c", "lat": 50.3, "lon": 7.0, "n": 4}, {"color": "#1f4e9c", "lat": 50.45, "lon": 30.52, "n": 5}, {"color": "#c0392b", "lat": 38.0, "lon": -79.0, "n": 6}, {"color": "#555555", "lat": 36.9, "lon": 30.71, "n": 7}, {"color": "#1f4e9c", "lat": 52.5, "lon": -4.5, "n": 8}, {"color": "#6a3fa0", "lat": 15.0, "lon": 88.0, "n": 9}, {"color": "#2e7d46", "lat": 12.0, "lon": 28.0, "n": 10}, {"color": "#c0392b", "lat": 41.8, "lon": -71.5, "n": 11}, {"color": "#0e7c7b", "lat": -41.29, "lon": 174.78, "n": 12}, {"color": "#2e7d46", "lat": 15.5, "lon": 41.0, "n": 13}], "meta": {"also_line": "ALSO ON WEDNESDAY 18 NOVEMBER", "footer_left": "Claims by warring sides are attributed. Original drawings; map from Natural Earth.", "footer_right": "Sources: AP · Reuters · AFP · NASA · EU Commission · ONS · Eurostat · IMD · UNFCCC · Amnesty · Ukraine Air Force", "kicker_left": "THE DAY IN WORLD NEWS", "kicker_right": "39 STORIES · 6 CONTINENTS · ONE DAY", "masthead": "Wednesday 18 November 2026", "subline": "Everything on this page happened, or was first reported, on Wednesday 18 November 2026."}, "stats": [{"big": "141", "label": "Russian drones fired at Ukraine overnight; 126 downed"}, {"big": "56–44", "label": "Democratic Senate after AP calls Alaska"}, {"big": "25.9bn km", "label": "Voyager 1 from Earth: one light-day"}, {"big": "$3,800", "label": "gold breaks below it for the first time in 14 months"}]}
+{
+ "continents": [
+  {
+   "color": "#6a3fa0",
+   "count": 10,
+   "name": "ASIA",
+   "w": 300
+  },
+  {
+   "color": "#cf6f1f",
+   "count": 3,
+   "name": "MIDDLE EAST",
+   "w": 130
+  },
+  {
+   "color": "#1f4e9c",
+   "count": 7,
+   "name": "EUROPE",
+   "w": 200
+  },
+  {
+   "color": "#2e7d46",
+   "count": 5,
+   "name": "AFRICA",
+   "w": 170
+  },
+  {
+   "color": "#c0392b",
+   "count": 6,
+   "name": "AMERICAS",
+   "w": 230
+  },
+  {
+   "color": "#0e7c7b",
+   "count": 5,
+   "name": "OCEANIA",
+   "w": 170
+  },
+  {
+   "color": "#555555",
+   "count": 2,
+   "name": "GLOBAL",
+   "w": 110
+  },
+  {
+   "color": "#111111",
+   "count": 1,
+   "name": "SPACE",
+   "w": 98
+  }
+ ],
+ "grid": [
+  {
+   "art": "eu",
+   "cat": "EUROPE · UKRAINE AID",
+   "color": "#1f4e9c",
+   "dek": "Repaid only when Russia pays reparations, von der Leyen says.",
+   "headline": "EU proposes a €45bn loan for Ukraine in 2027",
+   "n": 4
+  },
+  {
+   "art": "drones",
+   "cat": "EUROPE · UKRAINE WAR",
+   "color": "#1f4e9c",
+   "dek": "126 downed, Kyiv says; strikes on central Odesa kill four.",
+   "headline": "Russia fires 141 drones at Ukraine",
+   "n": 5
+  },
+  {
+   "art": "senate",
+   "cat": "AMERICAS · US POLITICS",
+   "color": "#c0392b",
+   "dek": "AP calls it for Mary Peltola over Dan Sullivan.",
+   "headline": "Democrats flip Alaska; Senate 56–44",
+   "n": 6
+  },
+  {
+   "art": "climate",
+   "cat": "GLOBAL · CLIMATE",
+   "color": "#555555",
+   "dek": "Fossil-fuel wording and a $120bn adaptation goal split the room.",
+   "headline": "Draft deal splits COP31 talks in Antalya",
+   "n": 7
+  },
+  {
+   "art": "inflation",
+   "cat": "EUROPE · ECONOMY",
+   "color": "#1f4e9c",
+   "dek": "Energy drives both; UK core holds at 2.8%.",
+   "headline": "Inflation climbs: UK 3.6%, euro area 4.0%",
+   "n": 8
+  },
+  {
+   "art": "cyclone",
+   "cat": "ASIA · WEATHER",
+   "color": "#6a3fa0",
+   "dek": "IMD: landfall on the Andhra coast around noon on 20 Nov.",
+   "headline": "India braces for Severe Cyclone Akvan",
+   "n": 9
+  },
+  {
+   "art": "elobeid",
+   "cat": "AFRICA · SUDAN WAR",
+   "color": "#2e7d46",
+   "dek": "It urges a war-crimes probe of nine strikes.",
+   "headline": "Amnesty: RSF drones killed 37 in El Obeid",
+   "n": 10
+  },
+  {
+   "art": "gold",
+   "cat": "GLOBAL · MARKETS",
+   "color": "#555555",
+   "dek": "Fed officials signal more rate rises.",
+   "headline": "Gold falls below $3,800, a 14-month low",
+   "n": 11
+  },
+  {
+   "art": "gta",
+   "cat": "OCEANIA · CULTURE",
+   "color": "#0e7c7b",
+   "dek": "13 years after GTA V; launch rolls west from 11:00 GMT.",
+   "headline": "GTA VI unlocks first in New Zealand",
+   "n": 12
+  },
+  {
+   "art": "horn",
+   "cat": "AFRICA · HORN OF AFRICA",
+   "color": "#2e7d46",
+   "dek": "Reuters: both armies gather; no clashes confirmed.",
+   "headline": "Ethiopia and Eritrea mass troops on the border",
+   "n": 13
+  }
+ ],
+ "heroes": [
+  {
+   "art": "apec",
+   "cat": "ASIA · APEC SUMMIT",
+   "color": "#6a3fa0",
+   "dek": "A hug at the airport, a Trump–Putin handshake at the banquet; the first US–China–Russia three-way talks are set for Thursday.",
+   "headline": "Xi greets Trump on the tarmac as APEC opens in Shenzhen",
+   "n": 1,
+   "source": "AFP · AP"
+  },
+  {
+   "art": "gulf",
+   "cat": "MIDDLE EAST · IRAN WAR",
+   "color": "#cf6f1f",
+   "dek": "Tehran says its drones targeted Ali Al Salem; Kuwait says its defences engaged them. Bahrain intercepts a third Iranian attack in a week.",
+   "headline": "Iran hits back at a US air base in Kuwait after the Qeshm strike",
+   "n": 2,
+   "source": "REUTERS"
+  },
+  {
+   "art": "voyager",
+   "cat": "SPACE · SCIENCE",
+   "color": "#111111",
+   "dek": "At 10:16 UTC it passed 25.9bn km, 49 years after launch. A radio command sent today reaches it tomorrow.",
+   "headline": "Voyager 1 is the first craft one light-day from Earth",
+   "n": 3,
+   "source": "NASA"
+  }
+ ],
+ "list": [
+  {
+   "color": "#c0392b",
+   "n": 14,
+   "place": "Washington",
+   "text": "Democrats pick Jeffries for speaker, 251–11"
+  },
+  {
+   "color": "#6a3fa0",
+   "n": 15,
+   "place": "Seoul",
+   "text": "Kospi jumps 2.7% as Asian chip stocks rally"
+  },
+  {
+   "color": "#6a3fa0",
+   "n": 16,
+   "place": "Shenzhen",
+   "text": "Xi backs US–North Korea talks, meeting Lee"
+  },
+  {
+   "color": "#6a3fa0",
+   "n": 17,
+   "place": "Shenzhen",
+   "text": "Japan’s Takaichi makes first China visit as PM"
+  },
+  {
+   "color": "#6a3fa0",
+   "n": 18,
+   "place": "Shenzhen",
+   "text": "Trump touts Philippine trade deal, no terms"
+  },
+  {
+   "color": "#cf6f1f",
+   "n": 19,
+   "place": "Yemen",
+   "text": "Saudi-led coalition says it hit 60 Houthi sites"
+  },
+  {
+   "color": "#cf6f1f",
+   "n": 20,
+   "place": "Israel",
+   "text": "Katz: troops stay in Lebanon, Syria, Gaza zones"
+  },
+  {
+   "color": "#6a3fa0",
+   "n": 21,
+   "place": "Dhaka",
+   "text": "troops deployed as unrest over Hasina grows"
+  },
+  {
+   "color": "#6a3fa0",
+   "n": 22,
+   "place": "Jakarta",
+   "text": "Bank Indonesia raises rates to 6.00%"
+  },
+  {
+   "color": "#6a3fa0",
+   "n": 23,
+   "place": "Kashmir",
+   "text": "top LeT commander killed in Kulgam"
+  },
+  {
+   "color": "#6a3fa0",
+   "n": 24,
+   "place": "Myanmar",
+   "text": "junta to “review” its ties with ASEAN"
+  },
+  {
+   "color": "#2e7d46",
+   "n": 25,
+   "place": "Sudan",
+   "text": "army advances to within 60 km of Al Nuhud"
+  },
+  {
+   "color": "#2e7d46",
+   "n": 26,
+   "place": "South Africa",
+   "text": "inflation rises to 5.2%"
+  },
+  {
+   "color": "#2e7d46",
+   "n": 27,
+   "place": "Uganda",
+   "text": "EACOP oil pipeline fast-tracked"
+  },
+  {
+   "color": "#1f4e9c",
+   "n": 28,
+   "place": "Berlin",
+   "text": "coalition cuts electricity tax to EU minimum"
+  },
+  {
+   "color": "#1f4e9c",
+   "n": 29,
+   "place": "Romania",
+   "text": "M5.7 Vrancea quake; two lightly hurt"
+  },
+  {
+   "color": "#1f4e9c",
+   "n": 30,
+   "place": "Turin",
+   "text": "Alcaraz beats Medvedev at the ATP Finals"
+  },
+  {
+   "color": "#1f4e9c",
+   "n": 31,
+   "place": "London",
+   "text": "UK sanctions eight settlement-linked firms"
+  },
+  {
+   "color": "#c0392b",
+   "n": 32,
+   "place": "New York",
+   "text": "Anthropic prices IPO tonight; debut Thursday"
+  },
+  {
+   "color": "#c0392b",
+   "n": 33,
+   "place": "Santiago",
+   "text": "ECLAC: Latin American poverty falls to 24.4%"
+  },
+  {
+   "color": "#c0392b",
+   "n": 34,
+   "place": "Chile",
+   "text": "economy shrinks 1.1% in the third quarter"
+  },
+  {
+   "color": "#c0392b",
+   "n": 35,
+   "place": "Bogotá",
+   "text": "Hegseth visits to deepen military ties"
+  },
+  {
+   "color": "#0e7c7b",
+   "n": 36,
+   "place": "Australia",
+   "text": "wages rise 1.1%; settler groups sanctioned"
+  },
+  {
+   "color": "#0e7c7b",
+   "n": 37,
+   "place": "Fiji",
+   "text": "national drought disaster declared"
+  },
+  {
+   "color": "#0e7c7b",
+   "n": 38,
+   "place": "Cook Islands",
+   "text": "Cyclone Xavier holds at Category 5"
+  },
+  {
+   "color": "#0e7c7b",
+   "n": 39,
+   "place": "Hobart",
+   "text": "England beat Australia to win ODI series 2–1"
+  }
+ ],
+ "map_dots": [
+  {
+   "color": "#6a3fa0",
+   "lat": 22.54,
+   "lon": 114.06,
+   "n": 1
+  },
+  {
+   "color": "#cf6f1f",
+   "lat": 29.31,
+   "lon": 47.48,
+   "n": 2
+  },
+  {
+   "color": "#1f4e9c",
+   "lat": 50.3,
+   "lon": 7.0,
+   "n": 4
+  },
+  {
+   "color": "#1f4e9c",
+   "lat": 50.45,
+   "lon": 30.52,
+   "n": 5
+  },
+  {
+   "color": "#c0392b",
+   "lat": 38.0,
+   "lon": -79.0,
+   "n": 6
+  },
+  {
+   "color": "#555555",
+   "lat": 36.9,
+   "lon": 30.71,
+   "n": 7
+  },
+  {
+   "color": "#1f4e9c",
+   "lat": 52.5,
+   "lon": -4.5,
+   "n": 8
+  },
+  {
+   "color": "#6a3fa0",
+   "lat": 15.0,
+   "lon": 88.0,
+   "n": 9
+  },
+  {
+   "color": "#2e7d46",
+   "lat": 12.0,
+   "lon": 28.0,
+   "n": 10
+  },
+  {
+   "color": "#c0392b",
+   "lat": 41.8,
+   "lon": -71.5,
+   "n": 11
+  },
+  {
+   "color": "#0e7c7b",
+   "lat": -41.29,
+   "lon": 174.78,
+   "n": 12
+  },
+  {
+   "color": "#2e7d46",
+   "lat": 15.5,
+   "lon": 41.0,
+   "n": 13
+  }
+ ],
+ "meta": {
+  "also_line": "ALSO ON WEDNESDAY 18 NOVEMBER",
+  "footer_left": "Claims by warring sides are attributed. Original drawings; coastlines from Natural Earth.",
+  "footer_right": "Sources: AP · Reuters · AFP · NASA · EU Commission · ONS · Eurostat · IMD · UNFCCC · Amnesty · Ukraine Air Force · UK FCDO",
+  "kicker_left": "THE DAY IN WORLD NEWS",
+  "kicker_right": "39 STORIES · 6 CONTINENTS · ONE DAY",
+  "masthead": "Wednesday 18 November 2026",
+  "subline": "Everything on this page happened, or was first reported, on Wednesday 18 November 2026."
+ },
+ "stats": [
+  {
+   "big": "141",
+   "label": "Russian drones fired at Ukraine overnight; 126 shot down, Kyiv says"
+  },
+  {
+   "big": "56–44",
+   "label": "Democratic Senate majority after AP calls Alaska for Peltola"
+  },
+  {
+   "big": "25.9bn km",
+   "label": "Voyager 1’s distance from Earth: one light-day, at 10:16 UTC"
+  },
+  {
+   "big": "$3,800",
+   "label": "gold breaks below it for the first time in 14 months"
+  }
+ ]
+}
