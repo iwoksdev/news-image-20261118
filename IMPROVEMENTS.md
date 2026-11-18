@@ -41,6 +41,14 @@ Live standings (updates as entries arrive):
   "Severe Cyclonic Storm", Odesa toll "four"; weak Peru no-damage quake
   swapped for UK sanctions on eight settlement-linked firms (London).
 
+- Refinement pass (in place, layout untouched): 4x supersample; owner's
+  fonts (Playfair heads, EB Garamond deks/index, DM Serif Display Italic
+  stat numbers); detailed hero-1 tarmac scene (VC-25-style aircraft, air
+  stair, Xi/Trump, CN-US flag line, Ping An spire); Gulf graticule + Hormuz
+  + cities; Voyager Milky Way band, terminator, glint; Alaska outline in the
+  Senate card; Bay of Bengal graticule + Visakhapatnam/Chennai; Horn cities
+  + Red Sea; world-map graticule + sea gradient; soft panel shadows.
+
 ## Ranked ideas (remaining)
 
 ### 1. Hero art polish

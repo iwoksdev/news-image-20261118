@@ -45,8 +45,15 @@ is already submitted and every change must keep it valid.
 - All page text lives in `stories.json`; edit text there, not in the renderer.
   `fit()` prints a `WARNING overflow` line if a headline/dek needs more lines
   than its slot — shorten the text until the render is warning-free.
-- Fonts come from `./fonts` (OFL: Noto Serif/Sans static instances, Playfair
-  Display Black for the masthead). No system fonts, no web fonts.
+- Fonts come from `./fonts` (all OFL, static instances subset to Latin).
+  Owner's picks, do not swap: masthead date + hero headlines = Playfair
+  Display (Black / ExtraBold; grid heads use Playfair Bold); deks, subtitle
+  line, index and stat labels = EB Garamond (Italic for the subtitle);
+  italic emphasis (stat numbers) = DM Serif Display Italic; kickers, chips
+  and map labels = Noto Sans. No system fonts, no web fonts.
+- Render at 4x supersample (`SS = 4`) and downscale with Lanczos — this is
+  what keeps edges soft. Do not lower it. Art panels get a 3-step soft
+  shadow (`soft_shadow`) — keep it subtle.
 - Maps are drawn from `world_110m.json` (world) and `regions_50m.json`
   (country shapes for the insets) — Natural Earth, public domain. Each art
   panel is drawn on its own sub-canvas, so map polygons clip to the panel.
