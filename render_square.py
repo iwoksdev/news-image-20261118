@@ -322,14 +322,21 @@ def art_voyager(x, y, w, h):
         dx, dy = rnd.random() * w, rnd.random() * h
         r = 0.9 + rnd.random() * 0.8
         ell(x + dx, y + dy, r, r, fill=(255, 255, 255))
-    # earth
+    # faint Milky Way band
+    soft(x, y, w, h, lambda d, X, Y: d.polygon([(0, S(h * .95)), (S(w * .35), 0), (S(w * .55), 0),
+         (S(w * .2), S(h))], fill=(70, 70, 130, 90)), blur=8)
+    # earth with an atmosphere glow
     ex, ey, er = x + w * 0.16, y + h * 0.72, h * 0.18
+    soft(x, y, w, h, lambda d, X, Y: d.ellipse([S(ex - er * 1.6) - X, S(ey - er * 1.6) - Y,
+         S(ex + er * 1.6) - X, S(ey + er * 1.6) - Y], fill=(110, 170, 255, 130)), blur=4)
     ell(ex - er, ey - er, er * 2, er * 2, fill=(59, 130, 246))
     ell(ex - er * 0.45, ey - er * 0.5, er * 0.7, er * 0.55, fill=(74, 222, 128))
     ell(ex + er * 0.1, ey + er * 0.25, er * 0.55, er * 0.45, fill=(74, 222, 128))
     # path + voyager
     vx, vy = x + w * 0.90, y + h * 0.26
     line([(ex + er * 0.5, ey - er * 0.6), (vx, vy)], (199, 210, 254), 1.5)
+    soft(x, y, w, h, lambda d, X, Y: d.ellipse([S(vx - 22) - X, S(vy - 22) - Y, S(vx + 22) - X,
+         S(vy + 22) - Y], fill=(255, 255, 230, 110)), blur=5)
     ell(vx - 10, vy - 10, 20, 20, fill=(229, 231, 235))
     draw.ellipse([S(vx - 15), S(vy - 15), S(vx + 15), S(vy + 15)], outline=(229, 231, 235), width=S(1.5))
     t = "VOYAGER 1"
