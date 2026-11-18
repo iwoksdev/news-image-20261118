@@ -3,9 +3,10 @@
 Fresh PIL renderer (supersampled 2x, downscaled to 1024). Written from scratch.
 """
 import math, random
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from geo_data import WORLD_LAND, WORLD_LAKES, GULF_LAND
 
-SS = 2                      # supersample factor
+SS = 3                      # supersample factor
 W, H = 1024, 1024
 PAPER = (247, 242, 227)
 INK = (17, 17, 17)
@@ -27,6 +28,13 @@ SERIF_I    = "NotoSerif-Italic.ttf"
 DISPLAY_BK = "NotoSerifDisplay-Black.ttf"
 SANS       = "NotoSans-Regular.ttf"
 SANS_B     = "NotoSans-Bold.ttf"
+SANS_SB    = "NotoSans-SemiBold.ttf"
+PF_BK      = "PlayfairDisplay-Black.ttf"    # masthead date, stat figures
+PF_B       = "PlayfairDisplay-Bold.ttf"     # hero headlines
+EBG        = "EBGaramond-Regular.ttf"       # deks
+EBG_M      = "EBGaramond-Medium.ttf"
+EBG_I      = "EBGaramond-Italic.ttf"        # subtitle line
+DMS_I      = "DMSerifDisplay-Italic.ttf"    # italic emphasis
 
 # region colors
 C = {
@@ -89,11 +97,29 @@ def draw_kicker(x, y, w, num, color, kick, src=None, num_size=15, kick_size=10.5
 
 def vgrad(box, c1, c2):
     x0, y0, x1, y1 = box
-    h = max(1, int(y1 - y0))
+    Y0, Y1 = S(y0), S(y1)
+    h = max(1, Y1 - Y0)
     for i in range(h):
         t = i / h
-        c = tuple(int(c1[j] + (c2[j] - c1[j]) * t) for j in range(3))
-        draw.line([S(x0), S(y0 + i), S(x1), S(y0 + i)], fill=c)
+        c = tuple(int(round(c1[j] + (c2[j] - c1[j]) * t)) for j in range(3))
+        draw.line([S(x0), Y0 + i, S(x1), Y0 + i], fill=c)
+
+def soft(x, y, w, h, painter, blur=0, opacity=1.0):
+    """Paint into an RGBA layer covering box (x,y,w,h), optionally blur it, and
+    composite onto the page, clipped to the box. painter(d, ox, oy) draws with
+    page coordinates via the offset helpers."""
+    global draw
+    X, Y, Wd, Ht = S(x), S(y), S(x + w) - S(x), S(y + h) - S(y)
+    layer = Image.new("RGBA", (Wd, Ht), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    painter(d, X, Y)
+    if blur:
+        layer = layer.filter(ImageFilter.GaussianBlur(S(blur)))
+    if opacity < 1:
+        a = layer.getchannel("A").point(lambda v: int(v * opacity))
+        layer.putalpha(a)
+    img.paste(layer, (X, Y), layer)
+    draw = ImageDraw.Draw(img)
 
 def star(cx, cy, ro, ri, rot=-90):
     pts = []
@@ -121,57 +147,173 @@ def txt(x, y, s, font_name, size, color=INK, anchor_left=True):
 
 # ---------------------------------------------------------------- art panels
 def art_apec(x, y, w, h):
-    vgrad((x, y, x + w, y + h), (246, 169, 59), (251, 211, 141))
-    ell(x + w * 0.82, y + h * 0.10, w * 0.09, h * 0.28, fill=(253, 243, 208))
-    # skyline
-    blds = [(0,.62,.06,.40),(.07,.52,.05,.50),(.14,.66,.045,.36),(.20,.48,.06,.54),
-            (.27,.60,.04,.42),(.33,.70,.06,.32),(.41,.56,.05,.46),(.48,.68,.06,.34),
-            (.55,.50,.05,.52),(.62,.64,.045,.38),(.68,.58,.06,.44),(.76,.68,.05,.34),
-            (.82,.54,.055,.48),(.89,.66,.05,.36),(.95,.58,.05,.44)]
-    for bx, by, bw, bh in blds:
-        rect(x + w * bx, y + h * by, w * bw, h * bh, fill=(43, 33, 64))
+    """Dusk over Shenzhen: layered skyline, Ping An tower, and a VC-25-style
+    jumbo on the tarmac with airstairs and a red carpet."""
+    vgrad((x, y, x + w, y + h * 0.78), (240, 150, 74), (253, 222, 168))
+    # sun with a soft halo
+    sx, sy, sr = x + w * 0.865, y + h * 0.26, h * 0.13
+    soft(x, y, w, h, lambda d, X, Y: d.ellipse([S(sx - sr * 2.4) - X, S(sy - sr * 2.4) - Y,
+         S(sx + sr * 2.4) - X, S(sy + sr * 2.4) - Y], fill=(255, 238, 190, 150)), blur=7)
+    ell(sx - sr, sy - sr, sr * 2, sr * 2, fill=(255, 246, 220))
+    # far skyline (hazy)
     rnd = random.Random(7)
-    for bx, by, bw, bh in blds:
-        for _ in range(3):
-            wx = x + w * (bx + rnd.random() * bw * 0.7)
-            wy = y + h * (by + 0.08 + rnd.random() * bh * 0.55)
-            rect(wx, wy, 2.5, 3.5, fill=(255, 217, 77))
-    # plane
-    px, py = x + w * 0.18, y + h * 0.30
-    poly([(px, py), (px + w * 0.28, py - h * 0.03), (px + w * 0.44, py + h * 0.015),
-          (px + w * 0.28, py + h * 0.05), (px + w * 0.11, py + h * 0.07),
-          (px + w * 0.06, py + h * 0.13), (px + w * 0.03, py + h * 0.07),
-          (px, py + h * 0.045)], fill=(244, 246, 248))
-    poly([(px + w * 0.28, py - h * 0.04), (px + w * 0.34, py - h * 0.22),
-          (px + w * 0.365, py - h * 0.04)], fill=(29, 78, 216))
-    for i in range(3):
-        ell(px + w * (0.17 + i * 0.04), py + h * 0.015, 2.2, 2.2, fill=(29, 78, 216))
+    def skyline(d, X, Y, base, col, n, hmin, hmax, seed):
+        r = random.Random(seed); cx = x - 4
+        while cx < x + w:
+            bw = w * (0.025 + r.random() * 0.035); bh = h * (hmin + r.random() * (hmax - hmin))
+            d.rectangle([S(cx) - X, S(base - bh) - Y, S(cx + bw) - X, S(base) - Y], fill=col)
+            if r.random() < 0.3:   # stepped crown
+                d.rectangle([S(cx + bw * 0.25) - X, S(base - bh - h * 0.04) - Y,
+                             S(cx + bw * 0.75) - X, S(base - bh) - Y], fill=col)
+            cx += bw + w * 0.004
+    base = y + h * 0.80
+    soft(x, y, w, h, lambda d, X, Y: skyline(d, X, Y, base, (188, 120, 128, 255), 0, .18, .38, 3), blur=0.6)
+    # Ping An Finance Centre silhouette (tallest, with spire)
+    pa = x + w * 0.60
+    def pingan(d, X, Y):
+        pts = [(pa - w * .022, base), (pa - w * .016, y + h * .16), (pa - w * .006, y + h * .10),
+               (pa, y + h * .02), (pa + w * .006, y + h * .10), (pa + w * .016, y + h * .16),
+               (pa + w * .022, base)]
+        d.polygon([(S(a) - X, S(b) - Y) for a, b in pts], fill=(92, 62, 98, 255))
+    soft(x, y, w, h, pingan)
+    soft(x, y, w, h, lambda d, X, Y: skyline(d, X, Y, base, (66, 46, 82, 255), 0, .12, .30, 9))
+    # lit windows on the near skyline
+    for _ in range(70):
+        wx = x + rnd.random() * w; wy = base - rnd.random() * h * 0.22
+        if abs(wx - pa) < w * 0.03: continue
+        rect(wx, wy, 1.6, 2.2, fill=(255, 214, 120))
+    # tarmac
+    vgrad((x, base, x + w, y + h), (92, 92, 104), (60, 60, 70))
+    line([(x, base + 0.5), (x + w, base + 0.5)], (140, 138, 150), 0.8)
+    for i in range(8):
+        lx = x + w * (0.04 + i * 0.12)
+        line([(lx, y + h * 0.93), (lx + w * 0.05, y + h * 0.93)], (235, 220, 150), 1.1)
+    # aircraft (nose left), drawn as a masked layer for clean anti-aliased edges
+    L = w * 0.50; px0 = x + w * 0.05; cy = y + h * 0.60; fh = h * 0.13
+    def plane(d, X, Y):
+        P = lambda pts: [(S(a) - X, S(b) - Y) for a, b in pts]
+        # shadow
+        pass
+    # shadow under the jet
+    soft(x, y, w, h, lambda d, X, Y: d.ellipse([S(px0 + L * .05) - X, S(y + h * .845) - Y,
+         S(px0 + L * .98) - X, S(y + h * .905) - Y], fill=(20, 20, 30, 150)), blur=2.2)
+    X, Y = S(x), S(y)
+    lw, lh = S(x + w) - X, S(y + h) - Y
+    m = Image.new("L", (lw, lh), 0); md = ImageDraw.Draw(m)
+    Pp = lambda pts: [(S(a) - X, S(b) - Y) for a, b in pts]
+    top, bot = cy - fh / 2, cy + fh / 2
+    # fuselage body + rounded nose + tapering tail cone
+    md.rounded_rectangle([S(px0 + fh * .2) - X, S(top) - Y, S(px0 + L * .86) - X, S(bot) - Y], radius=S(fh / 2), fill=255)
+    md.polygon(Pp([(px0 + L * .80, top), (px0 + L * 1.0, cy - fh * .28), (px0 + L * 1.0, cy - fh * .05),
+                   (px0 + L * .80, bot)]), fill=255)
+    # 747 upper-deck hump
+    md.ellipse([S(px0 + fh * .25) - X, S(top - fh * .42) - Y, S(px0 + L * .36) - X, S(top + fh * .5) - Y], fill=255)
+    md.polygon(Pp([(px0 + L * .20, top - fh * .40), (px0 + L * .36, top + fh * .02), (px0 + L * .20, top + fh * .2)]), fill=255)
+    col = Image.new("RGB", (lw, lh), (247, 248, 250)); cd = ImageDraw.Draw(col)
+    cd.rectangle([0, S(cy + fh * .06) - Y, lw, lh], fill=(126, 186, 222))          # robin's-egg belly
+    cd.rectangle([0, S(cy - fh * .02) - Y, lw, S(cy + fh * .10) - Y], fill=(28, 52, 110))  # cheatline
+    img.paste(col, (X, Y), m)
+    draw2 = ImageDraw.Draw(img)
+    # tail fin, stabiliser, wing, engines
+    poly([(px0 + L * .80, top + 0.5), (px0 + L * .90, top - fh * 1.45), (px0 + L * .99, top - fh * 1.45),
+          (px0 + L * .97, top + 0.5)], fill=(28, 52, 110))
+    for k in range(3):   # flag stripes on the fin
+        line([(px0 + L * (.885 + k * .003), top - fh * (1.1 - k * .22)),
+              (px0 + L * (.965 + k * .002), top - fh * (1.1 - k * .22))], (196, 40, 48), 0.9)
+    poly([(px0 + L * .86, cy - fh * .05), (px0 + L * 1.02, cy - fh * .30), (px0 + L * 1.02, cy - fh * .12),
+          (px0 + L * .90, cy + fh * .08)], fill=(205, 212, 222))
+    poly([(px0 + L * .36, cy + fh * .30), (px0 + L * .62, cy + fh * .55), (px0 + L * .66, cy + fh * .48),
+          (px0 + L * .46, cy + fh * .22)], fill=(170, 180, 194))
+    for ex in (.40, .50):
+        draw.rounded_rectangle([S(px0 + L * ex), S(cy + fh * .48), S(px0 + L * (ex + .075)), S(cy + fh * .98)],
+                               radius=S(fh * .22), fill=(200, 206, 216), outline=(120, 128, 140), width=S(0.6))
+        ell(px0 + L * ex - 0.2, cy + fh * .52, fh * .35, fh * .42, fill=(70, 76, 90))
+    # windows, cockpit
+    for k in range(26):
+        wx = px0 + L * (.10 + k * .027)
+        if wx > px0 + L * .80: break
+        ell(wx, cy - fh * .30, 1.25, 1.35, fill=(40, 52, 80))
+    for k in range(5):
+        ell(px0 + L * (.08 + k * .028), top - fh * .12, 1.15, 1.25, fill=(40, 52, 80))
+    poly([(px0 + fh * .30, top - fh * .02), (px0 + fh * .75, top - fh * .12), (px0 + fh * .85, top + fh * .12),
+          (px0 + fh * .35, top + fh * .16)], fill=(30, 36, 52))
+    # landing gear
+    for gx in (.12, .48, .56):
+        line([(px0 + L * gx, bot), (px0 + L * gx, y + h * .855)], (60, 60, 66), 0.9)
+        ell(px0 + L * gx - 2.2, y + h * .835, 4.4, 4.4, fill=(28, 28, 32))
+    # airstairs + red carpet
+    sx0 = px0 + L * .17
+    poly([(sx0, cy - fh * .1), (sx0 + w * .07, y + h * .89), (sx0 + w * .085, y + h * .89), (sx0 + w * .012, cy - fh * .1)],
+         fill=(236, 236, 240))
+    for k in range(6):
+        t = (k + 1) / 7
+        line([(sx0 + w * .07 * t, cy - fh * .1 + (y + h * .89 - cy + fh * .1) * t),
+              (sx0 + w * .07 * t + w * .014, cy - fh * .1 + (y + h * .89 - cy + fh * .1) * t)], (150, 150, 160), 0.7)
+    poly([(sx0 + w * .07, y + h * .89), (sx0 + w * .30, y + h * .93), (sx0 + w * .30, y + h * .955),
+          (sx0 + w * .07, y + h * .91)], fill=(196, 34, 44))
     # tag chip
-    rect(x + 5, y + h - 18, 118, 14, fill=(255, 255, 255))
-    txt(x + 11, y + h - 16.5, "XI · TRUMP · PUTIN", SANS_B, 9.5)
+    draw.rounded_rectangle([S(x + 5), S(y + 5), S(x + 123), S(y + 19)], radius=S(2), fill=(255, 255, 255))
+    txt(x + 11, y + 6.5, "XI · TRUMP · PUTIN", SANS_B, 9.5)
 
 def art_gulf(x, y, w, h):
-    rect(x, y, w, h, fill=(10, 28, 61))
-    poly([(x + w * .09, y + h * .30), (x + w * .38, y + h * .12), (x + w * .67, y + h * .22),
-          (x + w * .91, y + h * .47), (x + w * .94, y + h * .76), (x + w * .56, y + h * .94),
-          (x + w * .19, y + h * .86), (x + w * .06, y + h * .61)], fill=(18, 41, 79))
-    poly([(x + w * .47, y + h * .20), (x + w * .73, y + h * .26), (x + w * .89, y + h * .51),
-          (x + w * .56, y + h * .88), (x + w * .38, y + h * .39)], fill=(14, 34, 66))
-    txt(x + w * .16, y + h * .22, "IRAQ", SANS_B, 9, (143, 168, 200))
-    txt(x + w * .74, y + h * .20, "IRAN", SANS_B, 9, (143, 168, 200))
-    txt(x + w * .43, y + h * .36, "KUWAIT", SANS_B, 10, (255, 255, 255))
-    txt(x + w * .37, y + h * .68, "SAUDI ARABIA", SANS_B, 9, (143, 168, 200))
-    txt(x + w * .66, y + h * .60, "BAHRAIN", SANS_B, 9, C["gold"])
-    txt(x + w * .69, y + h * .82, "THE GULF", SANS_B, 9, (91, 123, 166))
-    star(x + w * .58, y + h * .42, 7, 3)
-    star(x + w * .43, y + h * .58, 4.5, 2)
-    # white star bahrain
+    """The northern Gulf from Natural Earth 1:50m coastlines: Ali Al Salem air
+    base (Kuwait), Bahrain, and Qeshm island, with the drone track."""
+    lon0, lat0, k = 51.2, 28.0, h / 5.0          # px per degree latitude
+    kx = k * math.cos(math.radians(lat0))
+    def pr(lon, lat): return (x + w / 2 + (lon - lon0) * kx, y + h / 2 - (lat - lat0) * k)
+    vgrad((x, y, x + w, y + h), (14, 38, 80), (8, 24, 54))
+    def land(d, X, Y):
+        for ring in GULF_LAND:
+            pts = [(S(pr(a, b)[0]) - X, S(pr(a, b)[1]) - Y) for a, b in ring]
+            if len(pts) > 2:
+                d.polygon(pts, fill=(44, 70, 114, 255), outline=(120, 152, 196, 255))
+    soft(x, y, w, h, land)
+    # faint graticule
+    for lo in range(44, 60, 2):
+        xx = pr(lo, 0)[0]
+        if x < xx < x + w: line([(xx, y), (xx, y + h)], (40, 66, 108), 0.4)
+    for la in range(26, 31, 1):
+        yy = pr(0, la)[1]
+        if y < yy < y + h: line([(x, yy), (x + w, yy)], (40, 66, 108), 0.4)
+    kw, bh, qs = pr(47.52, 29.35), pr(50.55, 26.07), pr(55.90, 26.85)
+    # drone track Iran -> Kuwait (dashed arc), soft
+    src = pr(50.3, 29.6)
+    def track(d, X, Y):
+        n = 28
+        for i in range(n):
+            if i % 2: continue
+            t0, t1 = i / n, (i + 1) / n
+            def q(t):
+                mx, my = (src[0] + kw[0]) / 2, min(src[1], kw[1]) - h * 0.16
+                return ((1 - t) ** 2 * src[0] + 2 * (1 - t) * t * mx + t * t * kw[0],
+                        (1 - t) ** 2 * src[1] + 2 * (1 - t) * t * my + t * t * kw[1])
+            a0, a1 = q(t0), q(t1)
+            d.line([(S(a0[0]) - X, S(a0[1]) - Y), (S(a1[0]) - X, S(a1[1]) - Y)], fill=(255, 140, 90, 230), width=S(1.3))
+    soft(x, y, w, h, track)
+    # strike burst on Qeshm (US strike)
+    soft(x, y, w, h, lambda d, X, Y: d.ellipse([S(qs[0] - 11) - X, S(qs[1] - 11) - Y, S(qs[0] + 11) - X,
+         S(qs[1] + 11) - Y], fill=(255, 90, 60, 170)), blur=3)
+    ell(qs[0] - 3, qs[1] - 3, 6, 6, fill=(255, 220, 200))
+    # Kuwait glow + star
+    soft(x, y, w, h, lambda d, X, Y: d.ellipse([S(kw[0] - 13) - X, S(kw[1] - 13) - Y, S(kw[0] + 13) - X,
+         S(kw[1] + 13) - Y], fill=(255, 217, 77, 120)), blur=3.5)
+    star(kw[0], kw[1], 7, 3)
     pts = []
     for i in range(10):
         r = 5.5 if i % 2 == 0 else 2.4
-        a = math.radians(-90 + i * 36)
-        pts.append((S(x + w * .66 + r * math.cos(a)), S(y + h * .76 + r * math.sin(a))))
+        a_ = math.radians(-90 + i * 36)
+        pts.append((S(bh[0] + r * math.cos(a_)), S(bh[1] + r * math.sin(a_))))
     draw.polygon(pts, fill=(255, 255, 255))
+    lab = (150, 175, 208)
+    txt(pr(45.6, 30.35)[0], pr(0, 30.35)[1], "IRAQ", SANS_B, 9, lab)
+    txt(pr(52.6, 30.4)[0], pr(0, 30.4)[1], "IRAN", SANS_B, 9, lab)
+    txt(kw[0] - 52, kw[1] - 6, "KUWAIT", SANS_B, 10, (255, 255, 255))
+    txt(kw[0] - 52, kw[1] + 5, "Ali Al Salem", SANS, 7.5, (210, 222, 240))
+    txt(pr(44.2, 26.6)[0], pr(0, 26.6)[1], "SAUDI ARABIA", SANS_B, 9, lab)
+    txt(bh[0] + 7, bh[1] - 5, "BAHRAIN", SANS_B, 9, C["gold"])
+    txt(qs[0] - 30, qs[1] + 6, "QESHM", SANS_B, 8.5, (255, 175, 150))
+    txt(qs[0] - 30, qs[1] + 15.5, "US strike", SANS, 7.5, (255, 200, 185))
+    txt(pr(50.9, 27.55)[0], pr(0, 27.55)[1], "THE GULF", SANS_B, 8.5, (100, 135, 182))
 
 def art_voyager(x, y, w, h):
     rect(x, y, w, h, fill=(11, 11, 38))
@@ -428,12 +570,15 @@ f = F(SANS_B, 13)
 txt(X1 - text_w(t, f), 13.5, t, SANS_B, 13)
 # title, auto-fit to full width
 title = "Wednesday 18 November 2026"
-for sz in (54, 52, 50, 48):
-    ft = F(DISPLAY_BK, sz)
-    if text_w(title, ft) <= CW: break
-draw.text((S(X0), S(32)), title, font=ft, fill=INK)
-txt(X0, 92, "Everything on this page happened, or was first reported, on Wednesday 18 November 2026.",
-    SERIF_I, 14.5, (34, 34, 34))
+LNUM = ["lnum"]   # lining figures so the date and stats sit on the baseline
+for sz in [72 - 0.5 * i for i in range(50)]:
+    ft = F(PF_BK, sz)
+    if draw.textlength(title, font=ft, features=LNUM) / SS <= CW - 2: break
+draw.text((S(X0), S(84)), title, font=ft, fill=INK, anchor="ls", features=LNUM)
+pre = "Everything on this page happened, or was first reported, on "
+fp, fe = F(EBG_I, 16.5), F(DMS_I, 15.5)
+draw.text((S(X0), S(107)), pre, font=fp, fill=(34, 34, 34), anchor="ls")
+draw.text((S(X0 + text_w(pre, fp)), S(107)), "Wednesday 18 November 2026.", font=fe, fill=C["red"], anchor="ls")
 
 # --- region strip
 strip = [("ASIA 10", "asia", 190), ("MIDDLE EAST 3", "me", 130), ("EUROPE 6", "eu", 135),
@@ -454,8 +599,8 @@ for i, st in enumerate(HEROES):
     ART[st["art"]](hx, HY, hcol_w, 102)
     rect(hx, HY, hcol_w, 102, outline=INK, width=1.5)
     draw_kicker(hx, HY + 107, hcol_w, st["num"], C[st["col"]], st["kick"], st["src"])
-    used = fit_text(hx, HY + 127, hcol_w, st["head"], SERIF_B, [19, 18, 17], 1.12, 64)
-    fit_text(hx, HY + 127 + used + 3, hcol_w, st["dek"], SERIF, [12.5, 12, 11.5], 1.32, 44)
+    used = fit_text(hx, HY + 125, hcol_w, st["head"], PF_B, [20, 19.5, 19, 18], 1.13, 66)
+    fit_text(hx, HY + 125 + used + 3, hcol_w, st["dek"], EBG, [14.5, 14, 13.5, 13], 1.2, 56, (40, 40, 40))
 
 # --- rows 2 & 3
 def draw_row(y, items):
@@ -467,7 +612,7 @@ def draw_row(y, items):
         draw_kicker(cx, y + 58, ccol_w, st["num"], C[st["col"]], st["kick"],
                     num_size=13, kick_size=9.5)
         used = fit_text(cx, y + 75, ccol_w, st["head"], SERIF_B, [13, 12.5, 12], 1.14, 46)
-        fit_text(cx, y + 75 + used + 2, ccol_w, st["dek"], SERIF, [10.5, 10, 9.5], 1.3, 42)
+        fit_text(cx, y + 75 + used + 2, ccol_w, st["dek"], EBG, [12.5, 12, 11.5], 1.18, 44, (40, 40, 40))
 
 draw_row(381, ROWS[:5])
 draw_row(521, ROWS[5:])
@@ -483,26 +628,69 @@ rect(MX, BY, MW, MH, fill=(216, 236, 243), outline=INK, width=1.5)
 scx, scy = MW / 460, MH / 240
 def mp(pts): return [(MX + a * scx, BY + b * scy) for a, b in pts]
 land = (232, 217, 172)
-poly(mp([(18,62),(62,34),(112,36),(142,56),(132,88),(112,106),(86,96),(72,122),(46,112),(22,84)]), fill=land)
-poly(mp([(138,26),(152,22),(162,30),(154,40),(140,38)]), fill=land)
-poly(mp([(116,132),(152,126),(166,152),(156,196),(136,216),(121,182),(111,152)]), fill=land)
-poly(mp([(206,116),(252,106),(276,130),(266,176),(241,206),(216,182),(201,146)]), fill=land)
-poly(mp([(216,72),(242,50),(266,60),(261,86),(241,96),(221,88)]), fill=land)
-poly(mp([(272,62),(322,32),(382,36),(432,56),(422,96),(372,116),(322,112),(286,96),(266,82)]), fill=land)
-poly(mp([(356,132),(372,128),(382,136),(374,146),(358,144)]), fill=land)
-poly(mp([(392,142),(404,139),(412,145),(406,153),(394,152)]), fill=land)
-poly(mp([(376,172),(422,166),(436,186),(411,201),(381,196)]), fill=land)
-poly(mp([(446,206),(454,204),(459,209),(455,215),(447,214)]), fill=land)
+# Natural Earth 1:110m land, equirectangular, centred on 10°E so the Pacific
+# dots (Cook Islands, Fiji) sit inside the frame; lat 80N..60S.
+LONC, LATN, LATS = 10.0, 80.0, -60.0
+def geo(lon, lat):
+    lx = (lon - LONC + 180) % 360
+    return MX + lx / 360 * MW, BY + (LATN - lat) / (LATN - LATS) * MH
+def paint_world(d, X, Y):
+    for la in range(-60, 81, 30):     # graticule
+        yy = BY + (LATN - la) / (LATN - LATS) * MH
+        d.line([(0, S(yy) - Y), (S(MW), S(yy) - Y)], fill=(196, 222, 232, 255), width=S(0.5))
+    for lo in range(-180, 180, 30):
+        xx = MX + ((lo - LONC + 180) % 360) / 360 * MW
+        d.line([(S(xx) - X, 0), (S(xx) - X, S(MH))], fill=(196, 222, 232, 255), width=S(0.5))
+    for rings, fill, outl in ((WORLD_LAND, land + (255,), (196, 176, 128, 255)),
+                              (WORLD_LAKES, (216, 236, 243, 255), (196, 176, 128, 255))):
+        for ring in rings:
+            for shift in (-360, 0, 360):
+                pts = []
+                for lon, lat in ring:
+                    lx = lon - LONC + 180 + shift
+                    pts.append((S(MX + lx / 360 * MW) - X, S(BY + (LATN - lat) / (LATN - LATS) * MH) - Y))
+                if max(p[0] for p in pts) < 0 or min(p[0] for p in pts) > S(MW): continue
+                if len(pts) > 2: d.polygon(pts, fill=fill, outline=outl)
+soft(MX, BY, MW, MH, paint_world)
 txt(MX + 8, BY + 6, "WHERE IT HAPPENED", SANS_B, 9, (68, 68, 68))
-dots = [(62,86,"14","am"),(44,58,"31","am"),(128,164,"34","am"),(232,54,"28","eu"),
-        (264,66,"29","eu"),(240,88,"30","eu"),(276,126,"19","me"),(244,152,"27","af"),
-        (382,90,"16","asia"),(398,72,"15","asia"),(402,184,"36","oc"),
-        (446,160,"38","oc"),(420,206,"39","oc")]
-for dx, dy, num, col in dots:
-    px, py = MX + dx * scx, BY + dy * scy
-    ell(px - 7.5, py - 7.5, 15, 15, fill=C[col])
-    fn = F(SANS_B, 8.5)
-    txt(px - text_w(num, fn) / 2, py - 4.6, num, SANS_B, 8.5, (255, 255, 255))
+# numbered markers at true positions; overlapping discs are nudged apart
+# (deterministic relaxation) and tied back to their spot with a leader line
+PLACES = [(14, "am", -77.0, 38.9), (31, "am", -74.0, 40.7), (35, "am", -74.1, 4.7),
+          (34, "am", -77.0, -12.0), (32, "am", -70.7, -33.4), (28, "eu", 13.4, 52.5),
+          (30, "eu", 7.7, 45.1), (29, "eu", 26.5, 45.7), (20, "me", 35.2, 31.8),
+          (19, "me", 44.2, 15.4), (25, "af", 29.0, 13.0), (27, "af", 32.6, 0.3),
+          (26, "af", 28.0, -26.0), (23, "asia", 75.0, 33.7), (21, "asia", 90.4, 23.8),
+          (16, "asia", 114.1, 22.5), (15, "asia", 127.0, 37.6), (22, "asia", 106.8, -6.2),
+          (36, "oc", 149.1, -35.3), (39, "oc", 147.3, -42.9), (37, "oc", 178.4, -18.1),
+          (38, "oc", -159.8, -21.2)]
+R = 6.2
+anchors = [geo(lo, la) for _, _, lo, la in PLACES]
+pos = [list(p) for p in anchors]
+for _ in range(400):
+    for i in range(len(pos)):
+        for j in range(i + 1, len(pos)):
+            dx, dy = pos[j][0] - pos[i][0], pos[j][1] - pos[i][1]
+            dd = math.hypot(dx, dy)
+            if dd < 2 * R + 1.6:
+                if dd < 1e-6: dx, dy, dd = 0.0, 1.0, 1.0
+                push = (2 * R + 1.6 - dd) / 2
+                pos[i][0] -= dx / dd * push; pos[i][1] -= dy / dd * push
+                pos[j][0] += dx / dd * push; pos[j][1] += dy / dd * push
+    for i, p in enumerate(pos):     # gentle pull home, stay in frame
+        p[0] += (anchors[i][0] - p[0]) * 0.02; p[1] += (anchors[i][1] - p[1]) * 0.02
+        p[0] = min(max(p[0], MX + R + 2), MX + MW - R - 2)
+        p[1] = min(max(p[1], BY + 18 + R), BY + MH - 20 - R)
+for (num, col, _, _), (ax, ay), (px, py) in zip(PLACES, anchors, pos):
+    if math.hypot(px - ax, py - ay) > 3:
+        line([(ax, ay), (px, py)], (90, 90, 90), 0.7)
+        ell(ax - 1.4, ay - 1.4, 2.8, 2.8, fill=(60, 60, 60))
+for (num, col, _, _), (px, py) in zip(PLACES, pos):
+    soft(px - R - 3, py - R - 2, 2 * R + 6, 2 * R + 6, lambda d, X, Y, px=px, py=py: d.ellipse(
+        [S(px - R) - X, S(py - R + 1) - Y, S(px + R) - X, S(py + R + 1) - Y], fill=(0, 0, 0, 70)), blur=0.9)
+    ell(px - R, py - R, 2 * R, 2 * R, fill=C[col])
+    draw.ellipse([S(px - R), S(py - R), S(px + R), S(py + R)], outline=(255, 255, 255), width=S(0.8))
+    t = str(num); fn = F(SANS_B, 7.5)
+    txt(px - text_w(t, fn) / 2, py - 5.2, t, SANS_B, 7.5, (255, 255, 255))
 rect(MX + 5, BY + MH - 17, 168, 13, fill=(255, 255, 255), outline=INK)
 txt(MX + 10, BY + MH - 15, "3 — VOYAGER 1, OFF THE MAP", SANS_B, 9)
 
@@ -518,8 +706,8 @@ for i, (num, cap) in enumerate(STATS):
         line([(sx, sy + 58), (sx + sw - (8 if i % 2 == 0 else 0), sy + 58)], (153, 153, 153), 1)
     tx = sx if i % 2 == 0 else sx + 10
     tw = sw - (16 if i % 2 == 0 else 10)
-    fnum = F(DISPLAY_BK, 26)
-    draw.text((S(tx), S(sy)), num, font=fnum, fill=INK)
+    fnum = F(PF_BK, 27)
+    draw.text((S(tx), S(sy + 25)), num, font=fnum, fill=INK, anchor="ls", features=LNUM)
     fit_text(tx, sy + 30, tw, cap, SERIF, [9.5], 1.25, 28)
 
 # --- index (two columns), auto-fit font
