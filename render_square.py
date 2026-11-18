@@ -9,7 +9,8 @@ SS = 2                      # supersample factor
 W, H = 1024, 1024
 PAPER = (247, 242, 227)
 INK = (17, 17, 17)
-FONT_DIR = "/usr/share/fonts/truetype/noto/"
+import os
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts") + "/"
 
 def S(v): return int(round(v * SS))
 
@@ -584,5 +585,5 @@ fr = F(SANS, 8.5)
 txt(X1 - text_w(t, fr), FY + 5, t, SANS, 8.5, (68, 68, 68))
 
 img = img.resize((W, H), Image.LANCZOS)
-img.save("/home/hatch/workspace/make-fun-news-18nov/world-news-18-nov-2026-square.png")
+img.save(os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.png"), optimize=True)
 print("saved", img.size)
