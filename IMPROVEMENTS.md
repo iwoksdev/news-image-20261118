@@ -29,25 +29,44 @@ image — do not trace or reuse their pixels.
 Live standings (updates as entries arrive):
 `GET https://make.fun/api/competitions/news-image-20261118/leaderboard`
 
-## Ranked ideas
+## Done (18 Nov, redesign branch)
 
-### 1. Fix the weakest hero art (highest value)
-Hero 1's plane renders as a white blob — redraw it as a clean, recognizable
-Air Force One / tarmac scene. The Voyager panel and the Gulf map are already
-good; bring hero 1 up to their level. Check the top entries' hero panels for
-what "clean" looks like at 1024px.
+- Renderer rewritten: real Natural Earth coastlines (world map + Gulf /
+  Bay of Bengal / Horn insets), proper airliner + flags + red carpet for
+  hero 1, Voyager dish/boom + dimension bracket, Playfair Display masthead,
+  larger grid/index type, art panels clipped on sub-canvases, dots for all
+  39 stories on the map, overflow warnings instead of silent truncation.
+- Verified the previously unflagged items (141/126 drones, Akvan, Ethiopia–
+  Eritrea, GTA VI 11:00 UTC) against 18 Nov reporting; Akvan upgraded to
+  "Severe Cyclonic Storm", Odesa toll "four"; weak Peru no-damage quake
+  swapped for UK sanctions on eight settlement-linked firms (London).
 
-### 2. Verify-or-replace the unverified items
-These were never independently verified — they were carried over from the
-reference image. Verify each with a live source; replace or drop what you
-cannot confirm (do not invent):
-- "Russia fires 141 drones, 126 downed" (count + Odesa casualties)
-- "Cyclone Akvan" (name + landfall timing)
-- "Ethiopia and Eritrea mass troops on the border"
-- "GTA VI unlocks first in New Zealand … from 11:00 GMT"
-- Most index one-liners (14–39) — spot-check the load-bearing ones.
-Verified already (do not re-check): APEC, Qeshm/Kuwait, Voyager, EU €45bn,
-Peltola 56–44, gold $3,788, COP31 draft, UK 3.6% / euro 4.0%, El Obeid 37.
+- Refinement pass (in place, layout untouched): 4x supersample; owner's
+  fonts (Playfair heads, EB Garamond deks/index, DM Serif Display Italic
+  stat numbers); detailed hero-1 tarmac scene (VC-25-style aircraft, air
+  stair, Xi/Trump, CN-US flag line, Ping An spire); Gulf graticule + Hormuz
+  + cities; Voyager Milky Way band, terminator, glint; Alaska outline in the
+  Senate card; Bay of Bengal graticule + Visakhapatnam/Chennai; Horn cities
+  + Red Sea; world-map graticule + sea gradient; soft panel shadows.
+
+- Hero-zone pass: two-column hero (lead APEC story at 60% width with a
+  two-figure Trump/Xi illustration beside correct US and Chinese flags on a
+  shared ground line; Iran-war and Voyager heroes stacked at 40%, one
+  12 px gutter, edges aligned); NYT three-font system (Playfair Display
+  headlines, PT Serif deks/index, Inter Bold tracked caps for labels);
+  headlines rewritten as specific hooks and deks as complete sentences.
+
+## Ranked ideas (remaining)
+
+### 1. Hero art polish
+Hero 1 is now a recognisable airliner on a tarmac; further gains are in the
+small figures (Xi/Trump) and the air stair. Keep it flat and clean — the
+judge sees it at 1024px.
+
+### 2. Spot-check the index one-liners (14–39)
+Heroes, grid and the four formerly-flagged items are verified. The index
+lines were carried over from the reference; spot-check the load-bearing
+ones with a live source and shorten/attribute anything shaky.
 
 ### 3. Tighten the grid typography
 Some grid headlines are cramped at 1024px. Check every dek for clipping,

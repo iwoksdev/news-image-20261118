@@ -1,588 +1,931 @@
 #!/usr/bin/env python3
-"""Square 1024x1024 recomposition of 'The Day in World News — Wed 18 Nov 2026'.
-Fresh PIL renderer (supersampled 2x, downscaled to 1024). Written from scratch.
+"""Render entry.png — 'The Day in World News · Wednesday 18 November 2026'.
+
+1024x1024 newspaper front page, drawn with PIL at 3x and Lanczos-downscaled.
+Text comes from stories.json; coastlines from world_110m.json / regions_50m.json
+(Natural Earth, public domain); fonts from ./fonts (Noto + Playfair, OFL,
+static instances subset to Latin). No network, no clock, deterministic.
+
+    python3 render_square.py        # writes entry.png next to this file
 """
-import math, random
+import json
+import math
+import os
+import random
+
 from PIL import Image, ImageDraw, ImageFont
 
-SS = 2                      # supersample factor
+HERE = os.path.dirname(os.path.abspath(__file__))
+SS = 4                       # supersample factor
 W, H = 1024, 1024
-PAPER = (247, 242, 227)
-INK = (17, 17, 17)
-FONT_DIR = "/usr/share/fonts/truetype/noto/"
+OUT = os.path.join(HERE, "entry.png")
 
-def S(v): return int(round(v * SS))
+PAPER = (248, 244, 232)
+INK = (18, 18, 20)
+GREY = (92, 92, 96)
+RULE = (150, 148, 140)
+RED = (176, 32, 28)
+GOLD = (250, 206, 70)
 
-FONTS = {}
-def F(name, size):
-    key = (name, size)
-    if key not in FONTS:
-        FONTS[key] = ImageFont.truetype(FONT_DIR + name, S(size))
-    return FONTS[key]
+FONT_DIR = os.path.join(HERE, "fonts")
+# NYT three-font system (open substitutes): Playfair = Cheltenham role,
+# PT Serif = Imperial role, Inter Bold tracked caps = Franklin Gothic role.
+HEAD = "PlayfairDisplay-Bold.ttf"
+HEAD_BK = "PlayfairDisplay-Black.ttf"
+BODY = "PTSerif-Regular.ttf"
+BODY_B = "PTSerif-Bold.ttf"
+BODY_I = "PTSerif-Italic.ttf"
+LABEL = "Inter-Bold.ttf"
+LABEL_R = "Inter-Regular.ttf"
+LABEL_SB = "Inter-SemiBold.ttf"
+# legacy aliases used by the art functions
+SERIF, SERIF_B, SERIF_XB, SERIF_I = BODY, BODY_B, BODY_B, BODY_I
+SANS, SANS_B = LABEL_R, LABEL
+DISPLAY, DISPLAY2 = HEAD_BK, HEAD
+PF_B, PF_XB = HEAD, HEAD
+GAR, GAR_M, GAR_SB, GAR_I = BODY, BODY, BODY_B, BODY_I
+DMS, DMS_I = HEAD, HEAD
 
-SERIF      = "NotoSerif-Regular.ttf"
-SERIF_B    = "NotoSerif-Bold.ttf"
-SERIF_I    = "NotoSerif-Italic.ttf"
-DISPLAY_BK = "NotoSerifDisplay-Black.ttf"
-SANS       = "NotoSans-Regular.ttf"
-SANS_B     = "NotoSans-Bold.ttf"
-
-# region colors
-C = {
- "asia":  (123, 45, 142), "me":    (194, 65, 12),  "eu":   (29, 78, 216),
- "af":    (21, 128, 61),  "am":    (185, 28, 28),  "oc":   (13, 148, 136),
- "gl":    (107, 114, 128), "sp":   (17, 24, 39),   "red":  (180, 35, 24),
- "gold":  (255, 217, 77),
+# region palette (keys used in stories.json colours -> mapped by hex)
+REGION = {
+    "#6a3fa0": (112, 48, 150),   # asia
+    "#cf6f1f": (196, 86, 20),    # middle east
+    "#1f4e9c": (28, 78, 170),    # europe
+    "#2e7d46": (30, 120, 66),    # africa
+    "#c0392b": (178, 40, 34),    # americas
+    "#0e7c7b": (14, 124, 122),   # oceania
+    "#555555": (92, 92, 96),     # global
+    "#111111": (24, 24, 30),     # space
 }
 
-def wrap(text, font, maxw):
-    words = text.split()
-    lines, cur = [], ""
-    for w in words:
-        t = (cur + " " + w).strip()
-        if draw.textlength(t, font=font) <= S(maxw):
-            cur = t
-        else:
-            if cur: lines.append(cur)
-            cur = w
-    if cur: lines.append(cur)
-    return lines
 
-def text_w(t, font): return draw.textlength(t, font=font) / SS
+def col(hexstr):
+    return REGION.get(hexstr, tuple(int(hexstr[i:i + 2], 16) for i in (1, 3, 5)))
 
-def fit_text(x, y, w, text, font_name, sizes, lh, max_h, color=INK, align="left"):
-    """Try font sizes (desc) until wrapped text fits max_h. Draw it. Return used height."""
-    for size in sizes:
-        font = F(font_name, size)
-        lines = wrap(text, font, w)
-        used = len(lines) * size * lh
-        if used <= max_h:
-            yy = y
-            for ln in lines:
-                if align == "center":
-                    draw.text((S(x + (w - text_w(ln, font)) / 2), S(yy)), ln, font=font, fill=color)
-                else:
-                    draw.text((S(x), S(yy)), ln, font=font, fill=color)
-                yy += size * lh
-            return used
-    # fallback: smallest size even if it overflows
-    size = sizes[-1]; font = F(font_name, size)
-    lines = wrap(text, font, w); yy = y
-    for ln in lines:
-        draw.text((S(x), S(yy)), ln, font=font, fill=color)
-        yy += size * lh
-    return len(lines) * size * lh
 
-def draw_kicker(x, y, w, num, color, kick, src=None, num_size=15, kick_size=10.5):
-    r = num_size / 2
-    cx, cy = x + r, y + r
-    draw.ellipse([S(cx - r), S(cy - r), S(cx + r), S(cy + r)], fill=color)
-    fnum = F(SANS_B, num_size * 0.68)
-    t = str(num)
-    draw.text((S(cx - text_w(t, fnum) / 2), S(cy - num_size * 0.34)), t, font=fnum, fill=(255, 255, 255))
-    fk = F(SANS_B, kick_size)
-    draw.text((S(x + num_size + 5), S(y + 1)), kick, font=fk, fill=color)
-    if src:
-        fs = F(SANS, 9.5)
-        draw.text((S(x + w - text_w(src, fs)), S(y + 1.5)), src, font=fs, fill=(102, 102, 102))
+DATA = json.load(open(os.path.join(HERE, "stories.json")))
+WORLD = json.load(open(os.path.join(HERE, "world_110m.json")))
+REGIONS = json.load(open(os.path.join(HERE, "regions_50m.json")))
 
-def vgrad(box, c1, c2):
-    x0, y0, x1, y1 = box
-    h = max(1, int(y1 - y0))
-    for i in range(h):
-        t = i / h
-        c = tuple(int(c1[j] + (c2[j] - c1[j]) * t) for j in range(3))
-        draw.line([S(x0), S(y0 + i), S(x1), S(y0 + i)], fill=c)
+_FONTS = {}
 
-def star(cx, cy, ro, ri, rot=-90):
-    pts = []
-    for i in range(10):
-        r = ro if i % 2 == 0 else ri
-        a = math.radians(rot + i * 36)
-        pts.append((S(cx + r * math.cos(a)), S(cy + r * math.sin(a))))
-    draw.polygon(pts, fill=C["gold"])
 
-def poly(pts, fill=None, outline=None):
-    draw.polygon([(S(a), S(b)) for a, b in pts], fill=fill, outline=outline)
+def F(name, size):
+    key = (name, round(size * SS))
+    if key not in _FONTS:
+        _FONTS[key] = ImageFont.truetype(os.path.join(FONT_DIR, name), max(1, round(size * SS)))
+    return _FONTS[key]
 
-def rect(x, y, w, h, fill=None, outline=None, width=1):
-    draw.rectangle([S(x), S(y), S(x + w), S(y + h)], fill=fill, outline=outline, width=S(width))
 
-def ell(x, y, w, h, fill=None, outline=None):
-    draw.ellipse([S(x), S(y), S(x + w), S(y + h)], fill=fill, outline=outline)
+# --------------------------------------------------------------------------- canvas
+class Canvas:
+    """Thin wrapper: 1x coordinates in, SS-scaled drawing out."""
 
-def line(pts, fill, width=1):
-    draw.line([(S(a), S(b)) for a, b in pts], fill=fill, width=S(width))
+    def __init__(self, w, h, bg=None):
+        self.w, self.h = w, h
+        self.img = Image.new("RGB", (round(w * SS), round(h * SS)), bg or PAPER)
+        self.d = ImageDraw.Draw(self.img)
 
-def txt(x, y, s, font_name, size, color=INK, anchor_left=True):
-    f = F(font_name, size)
-    draw.text((S(x), S(y)), s, font=f, fill=color)
+    def S(self, v):
+        return v * SS
 
-# ---------------------------------------------------------------- art panels
-def art_apec(x, y, w, h):
-    vgrad((x, y, x + w, y + h), (246, 169, 59), (251, 211, 141))
-    ell(x + w * 0.82, y + h * 0.10, w * 0.09, h * 0.28, fill=(253, 243, 208))
-    # skyline
-    blds = [(0,.62,.06,.40),(.07,.52,.05,.50),(.14,.66,.045,.36),(.20,.48,.06,.54),
-            (.27,.60,.04,.42),(.33,.70,.06,.32),(.41,.56,.05,.46),(.48,.68,.06,.34),
-            (.55,.50,.05,.52),(.62,.64,.045,.38),(.68,.58,.06,.44),(.76,.68,.05,.34),
-            (.82,.54,.055,.48),(.89,.66,.05,.36),(.95,.58,.05,.44)]
-    for bx, by, bw, bh in blds:
-        rect(x + w * bx, y + h * by, w * bw, h * bh, fill=(43, 33, 64))
-    rnd = random.Random(7)
-    for bx, by, bw, bh in blds:
-        for _ in range(3):
-            wx = x + w * (bx + rnd.random() * bw * 0.7)
-            wy = y + h * (by + 0.08 + rnd.random() * bh * 0.55)
-            rect(wx, wy, 2.5, 3.5, fill=(255, 217, 77))
-    # plane
-    px, py = x + w * 0.18, y + h * 0.30
-    poly([(px, py), (px + w * 0.28, py - h * 0.03), (px + w * 0.44, py + h * 0.015),
-          (px + w * 0.28, py + h * 0.05), (px + w * 0.11, py + h * 0.07),
-          (px + w * 0.06, py + h * 0.13), (px + w * 0.03, py + h * 0.07),
-          (px, py + h * 0.045)], fill=(244, 246, 248))
-    poly([(px + w * 0.28, py - h * 0.04), (px + w * 0.34, py - h * 0.22),
-          (px + w * 0.365, py - h * 0.04)], fill=(29, 78, 216))
-    for i in range(3):
-        ell(px + w * (0.17 + i * 0.04), py + h * 0.015, 2.2, 2.2, fill=(29, 78, 216))
-    # tag chip
-    rect(x + 5, y + h - 18, 118, 14, fill=(255, 255, 255))
-    txt(x + 11, y + h - 16.5, "XI · TRUMP · PUTIN", SANS_B, 9.5)
+    def rect(self, x, y, w, h, fill=None, outline=None, width=1):
+        self.d.rectangle([x * SS, y * SS, (x + w) * SS, (y + h) * SS], fill=fill,
+                         outline=outline, width=max(1, round(width * SS)))
 
-def art_gulf(x, y, w, h):
-    rect(x, y, w, h, fill=(10, 28, 61))
-    poly([(x + w * .09, y + h * .30), (x + w * .38, y + h * .12), (x + w * .67, y + h * .22),
-          (x + w * .91, y + h * .47), (x + w * .94, y + h * .76), (x + w * .56, y + h * .94),
-          (x + w * .19, y + h * .86), (x + w * .06, y + h * .61)], fill=(18, 41, 79))
-    poly([(x + w * .47, y + h * .20), (x + w * .73, y + h * .26), (x + w * .89, y + h * .51),
-          (x + w * .56, y + h * .88), (x + w * .38, y + h * .39)], fill=(14, 34, 66))
-    txt(x + w * .16, y + h * .22, "IRAQ", SANS_B, 9, (143, 168, 200))
-    txt(x + w * .74, y + h * .20, "IRAN", SANS_B, 9, (143, 168, 200))
-    txt(x + w * .43, y + h * .36, "KUWAIT", SANS_B, 10, (255, 255, 255))
-    txt(x + w * .37, y + h * .68, "SAUDI ARABIA", SANS_B, 9, (143, 168, 200))
-    txt(x + w * .66, y + h * .60, "BAHRAIN", SANS_B, 9, C["gold"])
-    txt(x + w * .69, y + h * .82, "THE GULF", SANS_B, 9, (91, 123, 166))
-    star(x + w * .58, y + h * .42, 7, 3)
-    star(x + w * .43, y + h * .58, 4.5, 2)
-    # white star bahrain
-    pts = []
-    for i in range(10):
-        r = 5.5 if i % 2 == 0 else 2.4
-        a = math.radians(-90 + i * 36)
-        pts.append((S(x + w * .66 + r * math.cos(a)), S(y + h * .76 + r * math.sin(a))))
-    draw.polygon(pts, fill=(255, 255, 255))
+    def rrect(self, x, y, w, h, r, fill=None, outline=None, width=1):
+        self.d.rounded_rectangle([x * SS, y * SS, (x + w) * SS, (y + h) * SS], radius=r * SS,
+                                 fill=fill, outline=outline, width=max(1, round(width * SS)))
 
-def art_voyager(x, y, w, h):
-    rect(x, y, w, h, fill=(11, 11, 38))
-    rnd = random.Random(11)
-    for _ in range(46):
-        dx, dy = rnd.random() * w, rnd.random() * h
-        r = 0.9 + rnd.random() * 0.8
-        ell(x + dx, y + dy, r, r, fill=(255, 255, 255))
-    # earth
-    ex, ey, er = x + w * 0.16, y + h * 0.72, h * 0.18
-    ell(ex - er, ey - er, er * 2, er * 2, fill=(59, 130, 246))
-    ell(ex - er * 0.45, ey - er * 0.5, er * 0.7, er * 0.55, fill=(74, 222, 128))
-    ell(ex + er * 0.1, ey + er * 0.25, er * 0.55, er * 0.45, fill=(74, 222, 128))
-    # path + voyager
-    vx, vy = x + w * 0.90, y + h * 0.26
-    line([(ex + er * 0.5, ey - er * 0.6), (vx, vy)], (199, 210, 254), 1.5)
-    ell(vx - 10, vy - 10, 20, 20, fill=(229, 231, 235))
-    draw.ellipse([S(vx - 15), S(vy - 15), S(vx + 15), S(vy + 15)], outline=(229, 231, 235), width=S(1.5))
-    t = "VOYAGER 1"
-    f = F(SANS_B, 9.5)
-    txt(x + w - text_w(t, f) - 6, y + h * 0.06, t, SANS_B, 9.5, (255, 255, 255))
-    t2 = "1 LIGHT-DAY · 25.9 BILLION KM"
-    f2 = F(SANS_B, 10)
-    txt(x + w - text_w(t2, f2) - 6, y + h * 0.52, t2, SANS_B, 10, C["gold"])
-    txt(x + 6, y + h - 13, "EARTH", SANS_B, 9, (255, 255, 255))
+    def ell(self, cx, cy, rx, ry=None, fill=None, outline=None, width=1):
+        ry = rx if ry is None else ry
+        self.d.ellipse([(cx - rx) * SS, (cy - ry) * SS, (cx + rx) * SS, (cy + ry) * SS],
+                       fill=fill, outline=outline, width=max(1, round(width * SS)))
 
-def art_eu(x, y, w, h):
-    rect(x, y, w, h, fill=(30, 64, 175))
-    cx, cy, r = x + w * 0.23, y + h * 0.5, h * 0.36
-    for i in range(12):
-        a = math.radians(-90 + i * 30)
-        star(cx + r * math.cos(a), cy + r * math.sin(a), 3.4, 1.5)
-    txt(x + w * 0.40, y + h * 0.30, "€45bn", SANS_B, 24, C["gold"])
+    def poly(self, pts, fill=None, outline=None, width=1):
+        p = [(a * SS, b * SS) for a, b in pts]
+        if fill is not None:
+            self.d.polygon(p, fill=fill)
+        if outline is not None:
+            self.d.line(p + [p[0]], fill=outline, width=max(1, round(width * SS)), joint="curve")
 
-def art_drones(x, y, w, h):
-    rect(x, y, w, h, fill=(11, 11, 38))
-    rnd = random.Random(5)
-    for _ in range(14):
-        ell(x + rnd.random() * w, y + rnd.random() * h * 0.6, 1.6, 1.6, fill=(255, 255, 255))
-    for fx, fy in [(0.19, 0.32), (0.47, 0.40), (0.68, 0.28), (0.88, 0.42), (0.37, 0.58)]:
-        ell(x + w * fx - 2, y + h * fy - 2, 4, 4, fill=(239, 68, 68))
-    star(x + w * 0.63, y + h * 0.55, 6, 2.6)
-    rect(x, y + h - 13, w, 13, fill=(0, 0, 0))
-    t = "141 FIRED · 126 DOWNED"
-    f = F(SANS_B, 8.5)
-    txt(x + (w - text_w(t, f)) / 2, y + h - 11.5, t, SANS_B, 8.5, (255, 255, 255))
+    def line(self, pts, fill, width=1):
+        self.d.line([(a * SS, b * SS) for a, b in pts], fill=fill,
+                    width=max(1, round(width * SS)), joint="curve")
 
-def art_senate(x, y, w, h):
-    rect(x, y, w, h, fill=(255, 255, 255))
-    rect(x + 6, y + 7, w - 12, 22, fill=(29, 78, 216))
-    rect(x + w * 0.5, y + 7, w * 0.5 - 6, 22, fill=(185, 28, 28))
-    txt(x + 14, y + 10.5, "56", SANS_B, 14, (255, 255, 255))
-    txt(x + w * 0.44, y + 12, "D–R", SANS_B, 10, (255, 255, 255))
-    txt(x + w - 26, y + 10.5, "44", SANS_B, 14, (255, 255, 255))
-    t = "US SENATE"
-    f = F(SANS_B, 9)
-    txt(x + (w - text_w(t, f)) / 2, y + h - 13, t, SANS_B, 9, (102, 102, 102))
+    def dashed(self, p0, p1, fill, width=1, dash=3, gap=2.5):
+        x0, y0 = p0
+        x1, y1 = p1
+        L = math.hypot(x1 - x0, y1 - y0)
+        if L == 0:
+            return
+        ux, uy = (x1 - x0) / L, (y1 - y0) / L
+        t = 0
+        while t < L:
+            e = min(L, t + dash)
+            self.line([(x0 + ux * t, y0 + uy * t), (x0 + ux * e, y0 + uy * e)], fill, width)
+            t += dash + gap
 
-def art_cop(x, y, w, h):
-    rect(x, y, w, h, fill=(238, 246, 246))
-    ex, ey, er = x + w * 0.25, y + h * 0.5, h * 0.32
-    ell(ex - er, ey - er, er * 2, er * 2, fill=(59, 130, 246))
-    ell(ex - er * 0.4, ey - er * 0.45, er * 0.6, er * 0.5, fill=(74, 222, 128))
-    ell(ex + er * 0.15, ey + er * 0.2, er * 0.5, er * 0.4, fill=(74, 222, 128))
-    # thermometer
-    tx = x + w * 0.55
-    rect(tx, y + 7, 7, 30, fill=(255, 255, 255), outline=(185, 28, 28), width=1.5)
-    rect(tx + 2, y + 9, 3, 16, fill=(239, 68, 68))
-    ell(tx - 2.5, y + h - 15, 12, 12, fill=(239, 68, 68))
-    # draft doc
-    dx = x + w * 0.68
-    rect(dx, y + h * 0.42, w * 0.26, h * 0.46, fill=(255, 255, 255), outline=(153, 153, 153))
-    txt(dx + 5, y + h * 0.46, "DRAFT", SANS_B, 7, (185, 28, 28))
-    line([(dx + 5, y + h * 0.68), (dx + w * 0.22, y + h * 0.68)], (153, 153, 153))
-    line([(dx + 5, y + h * 0.78), (dx + w * 0.19, y + h * 0.78)], (153, 153, 153))
-    txt(x + 6, y + h - 11, "ANTALYA · 18 pp.", SANS_B, 8, (68, 68, 68))
+    def arc(self, cx, cy, r, a0, a1, fill, width=1):
+        self.d.arc([(cx - r) * SS, (cy - r) * SS, (cx + r) * SS, (cy + r) * SS], a0, a1,
+                   fill=fill, width=max(1, round(width * SS)))
 
-def art_inflation(x, y, w, h):
-    rect(x, y, w, h, fill=(255, 255, 255))
-    for cx, val, col, lab in [(0.25, "3.6%", (156, 163, 175), "UK"),
-                              (0.75, "4.0%", (29, 78, 216), "EURO AREA")]:
-        f = F(SANS_B, 10)
-        txt(x + w * cx - text_w(val, f) / 2, y + 2, val, SANS_B, 10)
-        rect(x + w * cx - 20, y + 16, 40, 22, fill=col)
-        f2 = F(SANS_B, 8)
-        txt(x + w * cx - text_w(lab, f2) / 2, y + h - 10, lab, SANS_B, 8, (68, 68, 68))
+    def tw(self, text, font_name, size):
+        return self.d.textlength(text, font=F(font_name, size)) / SS
 
-def art_cyclone(x, y, w, h):
-    poly([(x, y), (x + w * 0.5, y), (x + w * 0.37, y + h), (x, y + h)], fill=(242, 227, 179))
-    poly([(x + w * 0.5, y), (x + w, y), (x + w, y + h), (x + w * 0.63, y + h),
-          (x + w * 0.5, y + h * 0.38)], fill=(191, 227, 234))
-    cx, cy = x + w * 0.67, y + h * 0.45
-    for r, a0, a1 in [(16, 40, 330), (10, 200, 120), (5, 20, 300)]:
-        draw.arc([S(cx - r), S(cy - r), S(cx + r), S(cy + r)], a0, a1, fill=(255, 255, 255), width=S(2.4))
-    ell(cx - 2, cy - 2, 4, 4, fill=(255, 255, 255))
-    txt(x + 6, y + 3, "INDIA", SANS_B, 8, (68, 68, 68))
-    t = "BAY OF BENGAL"
-    f = F(SANS_B, 8)
-    txt(x + w - text_w(t, f) - 4, y + h - 11, t, SANS_B, 8, (29, 78, 216))
+    def text(self, x, y, s, font_name, size, fill=INK, anchor="la"):
+        self.d.text((x * SS, y * SS), s, font=F(font_name, size), fill=fill, anchor=anchor)
 
-def art_sudan(x, y, w, h):
-    rect(x, y, w, h, fill=(232, 201, 143))
-    for bx, by, bw, bh in [(0.04,.55,.14,.45),(.21,.42,.11,.58),(.35,.60,.16,.40),
-                           (.54,.48,.12,.52),(.68,.62,.15,.38),(.86,.52,.11,.48)]:
-        rect(x + w * bx, y + h * by, w * bw, h * bh, fill=(138, 109, 59))
-    poly([(x + w * 0.26, y + h * 0.18), (x + w * 0.285, y + h * 0.42),
-          (x + w * 0.235, y + h * 0.42)], fill=(107, 79, 29))
-    txt(x + 6, y + 3, "EL OBEID", SANS_B, 8, (68, 68, 68))
+    def tracked(self, x, y, s, size, fill=INK, tracking=1.6, font_name=None, anchor="l"):
+        """Inter Bold, uppercase, letter-spaced (the Franklin role). anchor l/r/m."""
+        font_name = font_name or LABEL
+        s = s.upper()
+        widths = [self.tw(ch, font_name, size) for ch in s]
+        total = sum(widths) + tracking * (len(s) - 1)
+        if anchor == "r":
+            x = x - total
+        elif anchor == "m":
+            x = x - total / 2
+        for ch, w in zip(s, widths):
+            self.text(x, y, ch, font_name, size, fill)
+            x += w + tracking
+        return total
 
-def art_gold(x, y, w, h):
-    rect(x, y, w, h, fill=(253, 246, 227))
-    pts = [(x + w * 0.05, y + h * 0.14), (x + w * 0.29, y + h * 0.20),
-           (x + w * 0.50, y + h * 0.18), (x + w * 0.74, y + h * 0.36),
-           (x + w * 0.93, y + h * 0.52)]
-    line(pts, (185, 28, 28), 2.4)
-    ex, ey = pts[-1]
-    poly([(ex, ey), (ex - 12, ey - 2), (ex - 5, ey + 9)], fill=(185, 28, 28))
-    txt(x + 8, y + h * 0.46, "$3,800", SERIF_B, 14)
-    txt(x + 8, y + h - 9, "14-MONTH LOW", SANS_B, 7, (185, 28, 28))
+    def ctext(self, cx, y, s, font_name, size, fill=INK):
+        self.text(cx, y, s, font_name, size, fill, anchor="ma")
 
-def art_gta(x, y, w, h):
-    vgrad((x, y, x + w, y + h), (91, 42, 110), (194, 65, 12))
-    vgrad((x, y + h * 0.55, x + w, y + h), (194, 65, 12), (31, 41, 55))
-    ell(x + w * 0.86, y + h * 0.08, w * 0.07, h * 0.26, fill=(253, 230, 138))
-    for bx, by, bw, bh in [(0,.72,.07,.28),(.09,.60,.06,.40),(.18,.75,.08,.25),
-                           (.28,.64,.06,.36),(.37,.78,.09,.22),(.48,.68,.07,.32),
-                           (.57,.56,.07,.44),(.66,.75,.08,.25),(.77,.64,.06,.36),
-                           (.85,.78,.08,.22),(.94,.72,.06,.28)]:
-        rect(x + w * bx, y + h * by, w * bw, h * bh, fill=(17, 24, 39))
-    # controller
-    cx, cy, cw, chh = x + w * 0.33, y + h * 0.22, w * 0.35, h * 0.28
-    draw.rounded_rectangle([S(cx), S(cy), S(cx + cw), S(cy + chh)], radius=S(7),
-                           fill=(244, 246, 248), outline=INK, width=S(1))
-    ell(cx + cw * 0.14, cy + chh * 0.32, 7, 7, outline=INK)
-    for dx, dy in [(0.68, 0.28), (0.76, 0.40), (0.68, 0.52), (0.60, 0.40)]:
-        ell(cx + cw * dx, cy + chh * dy, 3, 3, fill=INK)
-    txt(x + 6, y + 3, "MIDNIGHT IN NZ", SANS_B, 8, (255, 255, 255))
+    def rtext(self, rx, y, s, font_name, size, fill=INK):
+        self.text(rx, y, s, font_name, size, fill, anchor="ra")
 
-def art_ethiopia(x, y, w, h):
-    rect(x, y, w, h, fill=(242, 227, 179))
-    poly([(x + w * 0.50, y), (x + w, y), (x + w, y + h), (x + w * 0.74, y + h),
-          (x + w * 0.58, y + h * 0.50)], fill=(191, 227, 234))
-    # green arrow right
-    poly([(x + w * 0.07, y + h * 0.30), (x + w * 0.60, y + h * 0.30), (x + w * 0.60, y + h * 0.20),
-          (x + w * 0.70, y + h * 0.40), (x + w * 0.60, y + h * 0.60), (x + w * 0.60, y + h * 0.50),
-          (x + w * 0.07, y + h * 0.50)], fill=(21, 128, 61))
-    # red arrow left
-    poly([(x + w * 0.93, y + h * 0.62), (x + w * 0.40, y + h * 0.62), (x + w * 0.40, y + h * 0.52),
-          (x + w * 0.30, y + h * 0.72), (x + w * 0.40, y + h * 0.92), (x + w * 0.40, y + h * 0.82),
-          (x + w * 0.93, y + h * 0.82)], fill=(185, 28, 28))
-    txt(x + 6, y + 3, "ETHIOPIA", SANS_B, 8, (68, 68, 68))
-    t = "ERITREA"
-    f = F(SANS_B, 8)
-    txt(x + w - text_w(t, f) - 4, y + h - 11, t, SANS_B, 8, (185, 28, 28))
-
-ART = {"apec": art_apec, "gulf": art_gulf, "voyager": art_voyager, "eu": art_eu,
-       "drones": art_drones, "senate": art_senate, "cop": art_cop,
-       "inflation": art_inflation, "cyclone": art_cyclone, "sudan": art_sudan,
-       "gold": art_gold, "gta": art_gta, "ethiopia": art_ethiopia}
-
-# ---------------------------------------------------------------- data
-HEROES = [
- dict(num=1, col="asia", kick="ASIA · APEC SUMMIT", src="AFP · AP", art="apec",
-      head="Xi meets Trump on the tarmac as APEC opens in Shenzhen",
-      dek="The two men hug at the airport; Trump shakes hands with Putin at the banquet, and the first three-way talks are set for Thursday."),
- dict(num=2, col="me", kick="MIDDLE EAST · IRAN WAR", src="REUTERS", art="gulf",
-      head="Iran claims drone hits on a US air base in Kuwait",
-      dek="Tehran calls it payback for the US strike on Qeshm. Kuwait says its defences held; Bahrain turns back another wave."),
- dict(num=3, col="sp", kick="SPACE · SCIENCE", src="NASA", art="voyager",
-      head="Voyager 1, first craft one light-day from Earth",
-      dek="At 10:16 UTC it passed 25.9bn km. A command sent today arrives tomorrow."),
-]
-ROWS = [
- dict(num=4, col="eu", kick="EUROPE · UKRAINE AID", art="eu",
-      head="EU proposes a €45bn loan for Ukraine in 2027",
-      dek="Repayment waits until Russia pays war reparations, von der Leyen says."),
- dict(num=5, col="eu", kick="EUROPE · UKRAINE WAR", art="drones",
-      head="Russia fires 141 drones at Ukraine",
-      dek="126 downed, Kyiv says; strikes on Odesa kill four."),
- dict(num=6, col="am", kick="AMERICAS · US POLITICS", art="senate",
-      head="Democrats take Alaska; Senate 56–44",
-      dek="AP calls it for Mary Peltola over Dan Sullivan."),
- dict(num=7, col="gl", kick="GLOBAL · CLIMATE", art="cop",
-      head="Draft deal splits COP31 talks in Antalya",
-      dek="Fossil-fuel wording and a $120bn finance goal divide the room."),
- dict(num=8, col="eu", kick="EUROPE · ECONOMY", art="inflation",
-      head="Inflation climbs: UK 3.6%, euro area 4.0%",
-      dek="Energy drives both; UK core holds at 2.8%."),
- dict(num=9, col="asia", kick="ASIA · WEATHER", art="cyclone",
-      head="India braces for Cyclone Akvan",
-      dek="Rescuers on standby; landfall due 20 November."),
- dict(num=10, col="af", kick="AFRICA · SUDAN WAR", art="sudan",
-      head="Amnesty: RSF drones killed 37 in El Obeid",
-      dek="It urges a war crimes probe of nine strikes."),
- dict(num=11, col="gl", kick="GLOBAL · MARKETS", art="gold",
-      head="Gold falls below $3,800, a 14-month low",
-      dek="Fed officials signal more rate rises."),
- dict(num=12, col="oc", kick="OCEANIA · CULTURE", art="gta",
-      head="GTA VI unlocks first in New Zealand",
-      dek="13 years after GTA V; launch rolls west from 11:00 GMT."),
- dict(num=13, col="af", kick="AFRICA · HORN OF AFRICA", art="ethiopia",
-      head="Ethiopia and Eritrea mass troops on the border",
-      dek="Reuters: both armies gather; no clashes confirmed."),
-]
-INDEX = [
- (14,"am","Washington:","Democrats nominate Jeffries for speaker, 251–11"),
- (15,"asia","Seoul:","Kospi jumps 2.7% as Asian chip stocks rally"),
- (16,"asia","Shenzhen:","Xi backs US–North Korea talks in meeting with Lee"),
- (17,"asia","Shenzhen:","Japan’s Takaichi makes first China visit as PM"),
- (18,"asia","Shenzhen:","Trump announces Philippine trade deal, no terms"),
- (19,"me","Yemen:","Saudi-led coalition says it hit 60 Houthi sites"),
- (20,"me","Israel:","Katz: troops stay in Lebanon, Syria, Gaza zones"),
- (21,"asia","Dhaka:","troops deployed as unrest over Hasina grows"),
- (22,"asia","Jakarta:","Bank Indonesia raises rates to 6.00%"),
- (23,"asia","Kashmir:","top LeT commander killed in Kulgam"),
- (24,"asia","Myanmar:","junta to “review” its ties with ASEAN"),
- (25,"af","Sudan:","army advances to within 60 km of Al Nuhud"),
- (26,"af","South Africa:","inflation rises to 5.2%"),
- (27,"af","Uganda:","EACOP oil pipeline fast-tracked"),
- (28,"eu","Berlin:","coalition cuts electricity tax to EU minimum"),
- (29,"eu","Romania:","M5.7 Vrancea quake; two lightly hurt"),
- (30,"eu","Turin:","Alcaraz beats Medvedev at the ATP Finals"),
- (31,"am","New York:","Anthropic prices its IPO; trading starts Thursday"),
- (32,"am","Santiago:","ECLAC: Latin American poverty falls to 24.4%"),
- (33,"am","Chile:","economy shrinks 1.1% in the third quarter"),
- (34,"am","Peru:","M6.0 quake offshore; no damage reported"),
- (35,"am","Bogotá:","Hegseth visits to deepen military ties"),
- (36,"oc","Australia:","wages rise 1.1%; settler groups sanctioned"),
- (37,"oc","Fiji:","national drought disaster declared"),
- (38,"oc","Cook Islands:","Cyclone Xavier holds at Category 5"),
- (39,"oc","Hobart:","England beat Australia to win ODI series 2–1"),
-]
-STATS = [
- ("141", "Russian drones fired at Ukraine overnight; 126 downed"),
- ("56–44", "Democratic Senate after AP calls Alaska"),
- ("25.9bn km", "Voyager 1 from Earth: one light-day"),
- ("$3,800", "gold breaks below it for the first time in 14 months"),
-]
-
-# ---------------------------------------------------------------- render
-img = Image.new("RGB", (S(W), S(H)), (255, 255, 255))
-draw = ImageDraw.Draw(img)
-# paper + frame
-rect(0, 0, W, H, fill=PAPER)
-draw.rectangle([S(1.5), S(1.5), S(W - 1.5), S(H - 1.5)], outline=INK, width=S(3))
-
-X0, X1 = 16, 1008
-CW = X1 - X0  # 992
-
-# --- masthead
-txt(X0, 13, "THE DAY IN WORLD NEWS", SANS_B, 14, C["red"])
-t = "39 STORIES · 6 CONTINENTS · ONE DAY"
-f = F(SANS_B, 13)
-txt(X1 - text_w(t, f), 13.5, t, SANS_B, 13)
-# title, auto-fit to full width
-title = "Wednesday 18 November 2026"
-for sz in (54, 52, 50, 48):
-    ft = F(DISPLAY_BK, sz)
-    if text_w(title, ft) <= CW: break
-draw.text((S(X0), S(32)), title, font=ft, fill=INK)
-txt(X0, 92, "Everything on this page happened, or was first reported, on Wednesday 18 November 2026.",
-    SERIF_I, 14.5, (34, 34, 34))
-
-# --- region strip
-strip = [("ASIA 10", "asia", 190), ("MIDDLE EAST 3", "me", 130), ("EUROPE 6", "eu", 135),
-         ("AFRICA 5", "af", 125), ("AMERICAS 7", "am", 135), ("OCEANIA 5", "oc", 125),
-         ("GLOBAL 2", "gl", 90), ("SPACE 1", "sp", 62)]
-sx = X0
-for label, col, wdt in strip:
-    rect(sx, 116, wdt, 21, fill=C[col])
-    fs = F(SANS_B, 10.5)
-    txt(sx + (wdt - text_w(label, fs)) / 2, 120.5, label, SANS_B, 10.5, (255, 255, 255))
-    sx += wdt
-
-# --- heroes
-HY, HH = 145, 228
-hcol_w = (CW - 2 * 11) / 3
-for i, st in enumerate(HEROES):
-    hx = X0 + i * (hcol_w + 11)
-    ART[st["art"]](hx, HY, hcol_w, 102)
-    rect(hx, HY, hcol_w, 102, outline=INK, width=1.5)
-    draw_kicker(hx, HY + 107, hcol_w, st["num"], C[st["col"]], st["kick"], st["src"])
-    used = fit_text(hx, HY + 127, hcol_w, st["head"], SERIF_B, [19, 18, 17], 1.12, 64)
-    fit_text(hx, HY + 127 + used + 3, hcol_w, st["dek"], SERIF, [12.5, 12, 11.5], 1.32, 44)
-
-# --- rows 2 & 3
-def draw_row(y, items):
-    ccol_w = (CW - 4 * 11) / 5
-    for i, st in enumerate(items):
-        cx = X0 + i * (ccol_w + 11)
-        ART[st["art"]](cx, y, ccol_w, 53)
-        rect(cx, y, ccol_w, 53, outline=INK, width=1.5)
-        draw_kicker(cx, y + 58, ccol_w, st["num"], C[st["col"]], st["kick"],
-                    num_size=13, kick_size=9.5)
-        used = fit_text(cx, y + 75, ccol_w, st["head"], SERIF_B, [13, 12.5, 12], 1.14, 46)
-        fit_text(cx, y + 75 + used + 2, ccol_w, st["dek"], SERIF, [10.5, 10, 9.5], 1.3, 42)
-
-draw_row(381, ROWS[:5])
-draw_row(521, ROWS[5:])
-
-# --- also section
-AY = 661
-line([(X0, AY), (X1, AY)], INK, 2.5)
-txt(X0, AY + 5, "ALSO ON WEDNESDAY 18 NOVEMBER", SANS_B, 13)
-BY = 686
-# map panel
-MX, MW, MH = X0, 336, 168
-rect(MX, BY, MW, MH, fill=(216, 236, 243), outline=INK, width=1.5)
-scx, scy = MW / 460, MH / 240
-def mp(pts): return [(MX + a * scx, BY + b * scy) for a, b in pts]
-land = (232, 217, 172)
-poly(mp([(18,62),(62,34),(112,36),(142,56),(132,88),(112,106),(86,96),(72,122),(46,112),(22,84)]), fill=land)
-poly(mp([(138,26),(152,22),(162,30),(154,40),(140,38)]), fill=land)
-poly(mp([(116,132),(152,126),(166,152),(156,196),(136,216),(121,182),(111,152)]), fill=land)
-poly(mp([(206,116),(252,106),(276,130),(266,176),(241,206),(216,182),(201,146)]), fill=land)
-poly(mp([(216,72),(242,50),(266,60),(261,86),(241,96),(221,88)]), fill=land)
-poly(mp([(272,62),(322,32),(382,36),(432,56),(422,96),(372,116),(322,112),(286,96),(266,82)]), fill=land)
-poly(mp([(356,132),(372,128),(382,136),(374,146),(358,144)]), fill=land)
-poly(mp([(392,142),(404,139),(412,145),(406,153),(394,152)]), fill=land)
-poly(mp([(376,172),(422,166),(436,186),(411,201),(381,196)]), fill=land)
-poly(mp([(446,206),(454,204),(459,209),(455,215),(447,214)]), fill=land)
-txt(MX + 8, BY + 6, "WHERE IT HAPPENED", SANS_B, 9, (68, 68, 68))
-dots = [(62,86,"14","am"),(44,58,"31","am"),(128,164,"34","am"),(232,54,"28","eu"),
-        (264,66,"29","eu"),(240,88,"30","eu"),(276,126,"19","me"),(244,152,"27","af"),
-        (382,90,"16","asia"),(398,72,"15","asia"),(402,184,"36","oc"),
-        (446,160,"38","oc"),(420,206,"39","oc")]
-for dx, dy, num, col in dots:
-    px, py = MX + dx * scx, BY + dy * scy
-    ell(px - 7.5, py - 7.5, 15, 15, fill=C[col])
-    fn = F(SANS_B, 8.5)
-    txt(px - text_w(num, fn) / 2, py - 4.6, num, SANS_B, 8.5, (255, 255, 255))
-rect(MX + 5, BY + MH - 17, 168, 13, fill=(255, 255, 255), outline=INK)
-txt(MX + 10, BY + MH - 15, "3 — VOYAGER 1, OFF THE MAP", SANS_B, 9)
-
-# stats 2x2
-SY = BY + MH + 8
-sw = MW / 2
-for i, (num, cap) in enumerate(STATS):
-    sx = MX + (i % 2) * sw
-    sy = SY + (i // 2) * 61
-    if i % 2 == 0:
-        line([(sx + sw - 6, sy + 2), (sx + sw - 6, sy + 56)], (153, 153, 153), 1)
-    if i < 2:
-        line([(sx, sy + 58), (sx + sw - (8 if i % 2 == 0 else 0), sy + 58)], (153, 153, 153), 1)
-    tx = sx if i % 2 == 0 else sx + 10
-    tw = sw - (16 if i % 2 == 0 else 10)
-    fnum = F(DISPLAY_BK, 26)
-    draw.text((S(tx), S(sy)), num, font=fnum, fill=INK)
-    fit_text(tx, sy + 30, tw, cap, SERIF, [9.5], 1.25, 28)
-
-# --- index (two columns), auto-fit font
-IX = MX + MW + 12
-IW = X1 - IX
-ICW = (IW - 12) / 2
-def index_height(size):
-    f = F(SERIF, size)
-    total = 0
-    for col in (INDEX[:13], INDEX[13:]):
-        h = 0
-        for num, colr, place, text in col:
-            full = place + " " + text
-            lines = wrap(full, f, ICW - 19)
-            h += len(lines) * size * 1.28 + 4.5
-        total = max(total, h)
-    return total
-
-avail = (BY + MH + 8 + 122) - BY  # bottom block height
-for sz in (10, 9.5, 9, 8.5):
-    if index_height(sz) <= avail + 6:
-        break
-fidx = F(SERIF, sz)
-fidxb = F(SERIF_B, sz)
-for ci, col in enumerate((INDEX[:13], INDEX[13:])):
-    cx = IX + ci * (ICW + 12)
-    yy = BY
-    for num, colr, place, text in col:
-        r = 7
-        ell(cx, yy + 1, 14, 14, fill=C[colr])
-        fn = F(SANS_B, 8)
-        txt(cx + 7 - text_w(str(num), fn) / 2, yy + 3.6, str(num), SANS_B, 8, (255, 255, 255))
-        # bold place + regular rest, wrapped together
-        words = (place + " " + text).split()
+    def wrap(self, text, font_name, size, maxw):
+        words = text.split()
         lines, cur = [], ""
-        for wd in words:
-            t = (cur + " " + wd).strip()
-            if text_w(t, fidx) <= ICW - 19:
+        for w in words:
+            t = (cur + " " + w).strip()
+            if self.tw(t, font_name, size) <= maxw:
                 cur = t
             else:
-                if cur: lines.append(cur)
-                cur = wd
-        if cur: lines.append(cur)
-        ly = yy
-        for li, ln in enumerate(lines):
-            # bold the place part on first line
-            if li == 0 and ln.startswith(place):
-                draw.text((S(cx + 19), S(ly)), place, font=fidxb, fill=INK)
-                rest = ln[len(place):]
-                draw.text((S(cx + 19 + text_w(place, fidxb)), S(ly)), rest, font=fidx, fill=(26, 26, 26))
-            else:
-                draw.text((S(cx + 19), S(ly)), ln, font=fidx, fill=(26, 26, 26))
-            ly += sz * 1.28
-        yy = ly + 4.5
+                if cur:
+                    lines.append(cur)
+                cur = w
+        if cur:
+            lines.append(cur)
+        return lines
 
-# --- footer
-FY = 992
-line([(X0, FY), (X1, FY)], INK, 1.5)
-txt(X0, FY + 5, "Claims by warring sides are attributed. Original drawings; map from Natural Earth.",
-    SANS, 8.5, (68, 68, 68))
-t = "Sources: AP · Reuters · AFP · NASA · EU Commission · ONS · Eurostat · IMD · UNFCCC · Amnesty · Ukraine Air Force"
-fr = F(SANS, 8.5)
-txt(X1 - text_w(t, fr), FY + 5, t, SANS, 8.5, (68, 68, 68))
+    def fit(self, x, y, w, text, font_name, sizes, lh, max_lines, fill=INK, draw=True):
+        """Largest size whose wrap fits in max_lines; draws; returns height used."""
+        chosen = None
+        for size in sizes:
+            lines = self.wrap(text, font_name, size, w)
+            if len(lines) <= max_lines:
+                chosen = (size, lines)
+                break
+        if chosen is None:
+            size = sizes[-1]
+            lines = self.wrap(text, font_name, size, w)
+            print(f"WARNING overflow ({len(lines)} > {max_lines} lines): {text[:60]}")
+            chosen = (size, lines)
+        size, lines = chosen
+        if draw:
+            yy = y
+            for ln in lines:
+                self.text(x, yy, ln, font_name, size, fill)
+                yy += size * lh
+        return len(lines) * size * lh
 
-img = img.resize((W, H), Image.LANCZOS)
-img.save("/home/hatch/workspace/make-fun-news-18nov/world-news-18-nov-2026-square.png")
-print("saved", img.size)
+    def paste(self, other, x, y):
+        self.img.paste(other.img, (round(x * SS), round(y * SS)))
+
+    def star(self, cx, cy, ro, ri, fill, rot=-90, n=5):
+        pts = []
+        for i in range(2 * n):
+            r = ro if i % 2 == 0 else ri
+            a = math.radians(rot + i * 180 / n)
+            pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        self.poly(pts, fill=fill)
+
+    def vgrad(self, x, y, w, h, c1, c2):
+        steps = max(2, round(h * SS))
+        for i in range(steps):
+            t = i / (steps - 1)
+            c = tuple(round(c1[j] + (c2[j] - c1[j]) * t) for j in range(3))
+            yy = y + h * i / steps
+            self.d.line([(x * SS, yy * SS), ((x + w) * SS, yy * SS)], fill=c, width=2)
+
+
+# --------------------------------------------------------------------------- geo helpers
+def project(bbox, box):
+    """Equirectangular, uniform scale, centred. bbox=(lon0,lat0,lon1,lat1), box=(x,y,w,h)."""
+    lon0, lat0, lon1, lat1 = bbox
+    x, y, w, h = box
+    midlat = math.radians((lat0 + lat1) / 2)
+    gw = (lon1 - lon0) * math.cos(midlat)
+    gh = (lat1 - lat0)
+    s = min(w / gw, h / gh)
+    ox = x + (w - gw * s) / 2
+    oy = y + (h - gh * s) / 2
+
+    def fn(lon, lat):
+        return (ox + (lon - lon0) * math.cos(midlat) * s, oy + (lat1 - lat) * s)
+    return fn
+
+
+def draw_polys(cv, polys, proj, fill, outline=None, width=0.6):
+    for ring in polys:
+        pts = [proj(lon, lat) for lon, lat in ring]
+        if len(pts) >= 3:
+            cv.poly(pts, fill=fill, outline=outline, width=width)
+
+
+def burst(cv, cx, cy, r, fill, n=8):
+    pts = []
+    for i in range(2 * n):
+        rr = r if i % 2 == 0 else r * 0.45
+        a = math.radians(i * 180 / n)
+        pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
+    cv.poly(pts, fill=fill)
+
+
+def drone(cv, cx, cy, s, fill, flip=False):
+    """Shahed-style delta silhouette, pointing left (or right if flip)."""
+    k = -1 if flip else 1
+    cv.poly([(cx - 1.0 * s * k, cy), (cx + 0.9 * s * k, cy - 0.55 * s), (cx + 1.0 * s * k, cy - 0.15 * s),
+             (cx + 0.6 * s * k, cy), (cx + 1.0 * s * k, cy + 0.15 * s), (cx + 0.9 * s * k, cy + 0.55 * s)],
+            fill=fill)
+
+
+def chip(cv, x, y, s, font, size, fg=INK, bg=(255, 255, 255), pad=4, right=False, top=False):
+    w = cv.tw(s, font, size) + pad * 2
+    h = size * 1.45
+    xx = x - w if right else x
+    yy = y - h if top else y
+    cv.rect(xx, yy, w, h, fill=bg)
+    cv.text(xx + pad, yy + h * 0.14, s, font, size, fg)
+
+
+# --------------------------------------------------------------------------- hero art
+def flag_us(cv, x, y, w, h):
+    """13 stripes, 50 stars (rows of 6/5)."""
+    for i in range(13):
+        cv.rect(x, y + i * h / 13, w, h / 13 + 0.03, fill=(178, 34, 52) if i % 2 == 0 else (255, 255, 255))
+    cw, ch = w * 0.40, h * 7 / 13
+    cv.rect(x, y, cw, ch, fill=(60, 59, 110))
+    r = min(cw / 6, ch / 9) * 0.28
+    for row in range(9):
+        n = 6 if row % 2 == 0 else 5
+        for k in range(n):
+            sx = x + cw * ((k + 0.5) / 6 if n == 6 else (k + 1.0) / 6)
+            sy = y + ch * (row + 0.5) / 9
+            cv.star(sx, sy, r, r * 0.45, (255, 255, 255))
+
+
+def flag_cn(cv, x, y, w, h):
+    cv.rect(x, y, w, h, fill=(222, 41, 16))
+    cv.star(x + w * 0.17, y + h * 0.25, h * 0.15, h * 0.065, (255, 222, 0))
+    for dx, dy, rot in ((0.33, 0.10, -90), (0.40, 0.22, -90), (0.40, 0.38, -90), (0.33, 0.50, -90)):
+        cv.star(x + w * dx, y + h * dy, h * 0.05, h * 0.022, (255, 222, 0), rot=rot)
+
+
+def flag_on_pole(cv, x, base, H, kind, side):
+    """Pole at x standing on `base`; flag of height ~0.32H hangs to `side` (+1 right, -1 left)."""
+    top = base - H
+    cv.line([(x, base), (x, top)], (176, 170, 150), 1.4)
+    cv.ell(x, top - 1.2, 1.6, 1.6, fill=(212, 178, 92))
+    fw, fh = H * 0.46, H * 0.30
+    fx = x + 1 if side > 0 else x - 1 - fw
+    fy = top + 1.5
+    if kind == "us":
+        flag_us(cv, fx, fy, fw, fh)
+    else:
+        flag_cn(cv, fx, fy, fw, fh)
+    cv.line([(fx, fy + fh), (fx + fw, fy + fh)], (120, 110, 100), 0.4)
+
+
+def portrait(cv, x, base, H, hair, tie, suit=(32, 36, 56), skin=(232, 196, 166), hair_style="side"):
+    """Forward-facing standing figure, feet at (x, base), total height H."""
+    hw = H * 0.17            # half shoulder width
+    head_r = H * 0.072
+    shoulder_y = base - H * 0.74
+    hem_y = base - H * 0.40
+    leg_h = hem_y - (base - H * 0.03)
+    # ground shadow
+    cv.ell(x, base + 1.5, hw * 1.5, H * 0.02, fill=(196, 196, 198))
+    # shoes
+    for sx in (x - hw * 0.42, x + hw * 0.42):
+        cv.rrect(sx - hw * 0.30, base - H * 0.03, hw * 0.60, H * 0.03, H * 0.012, fill=(24, 24, 28))
+    # trousers
+    for sx in (x - hw * 0.40, x + hw * 0.40):
+        cv.rrect(sx - hw * 0.34, hem_y - H * 0.02, hw * 0.68, (base - H * 0.03) - hem_y + H * 0.02, H * 0.01, fill=suit)
+    # jacket body
+    cv.poly([(x - hw, shoulder_y + H * 0.01), (x + hw, shoulder_y + H * 0.01), (x + hw * 0.86, hem_y), (x - hw * 0.86, hem_y)], fill=suit)
+    cv.ell(x - hw * 0.70, shoulder_y + H * 0.03, hw * 0.34, H * 0.03, fill=suit)
+    cv.ell(x + hw * 0.70, shoulder_y + H * 0.03, hw * 0.34, H * 0.03, fill=suit)
+    # arms
+    for sgn in (-1, 1):
+        ax = x + sgn * hw * 0.98
+        cv.rrect(ax - hw * 0.22, shoulder_y + H * 0.04, hw * 0.44, H * 0.30, hw * 0.2, fill=suit)
+        cv.ell(ax + sgn * hw * 0.02, shoulder_y + H * 0.355, hw * 0.17, H * 0.022, fill=skin)
+    # shirt + lapels + tie
+    cv.poly([(x - hw * 0.36, shoulder_y + H * 0.01), (x + hw * 0.36, shoulder_y + H * 0.01), (x, shoulder_y + H * 0.17)], fill=(246, 246, 248))
+    lap = tuple(min(255, c_ + 16) for c_ in suit)
+    cv.poly([(x - hw * 0.40, shoulder_y + H * 0.005), (x - hw * 0.10, shoulder_y + H * 0.005), (x - hw * 0.02, shoulder_y + H * 0.19), (x - hw * 0.16, shoulder_y + H * 0.17)], fill=lap)
+    cv.poly([(x + hw * 0.40, shoulder_y + H * 0.005), (x + hw * 0.10, shoulder_y + H * 0.005), (x + hw * 0.02, shoulder_y + H * 0.19), (x + hw * 0.16, shoulder_y + H * 0.17)], fill=lap)
+    cv.poly([(x - hw * 0.085, shoulder_y + H * 0.02), (x + hw * 0.085, shoulder_y + H * 0.02), (x + hw * 0.07, shoulder_y + H * 0.20), (x, shoulder_y + H * 0.23), (x - hw * 0.07, shoulder_y + H * 0.20)], fill=tie)
+    cv.poly([(x - hw * 0.085, shoulder_y + H * 0.02), (x + hw * 0.085, shoulder_y + H * 0.02), (x, shoulder_y + H * 0.045)], fill=tuple(max(0, c_ - 40) for c_ in tie))
+    # pocket square, lapel pin, buttons
+    cv.rect(x - hw * 0.62, shoulder_y + H * 0.085, hw * 0.16, H * 0.012, fill=(246, 246, 248))
+    cv.ell(x - hw * 0.30, shoulder_y + H * 0.11, hw * 0.045, hw * 0.045, fill=(214, 182, 96))
+    for by_ in (0.26, 0.31):
+        cv.ell(x + hw * 0.04, shoulder_y + H * by_, hw * 0.03, hw * 0.03, fill=(70, 74, 92))
+    # neck + head
+    neck_y = shoulder_y - H * 0.02
+    cv.rect(x - head_r * 0.42, neck_y - H * 0.03, head_r * 0.84, H * 0.06, fill=skin)
+    hy = neck_y - head_r * 1.15
+    cv.ell(x - head_r * 0.98, hy + head_r * 0.1, head_r * 0.16, head_r * 0.26, fill=skin)
+    cv.ell(x + head_r * 0.98, hy + head_r * 0.1, head_r * 0.16, head_r * 0.26, fill=skin)
+    cv.ell(x, hy, head_r, head_r * 1.22, fill=skin)
+    # hair
+    if hair_style == "swept":   # blond, swept forward, fuller on top
+        cv.d.pieslice([(x - head_r * 1.02) * SS, (hy - head_r * 1.34) * SS, (x + head_r * 1.02) * SS, (hy + head_r * 0.95) * SS], 185, 355, fill=hair)
+        cv.ell(x - head_r * 0.15, hy - head_r * 1.05, head_r * 0.9, head_r * 0.36, fill=hair)
+        cv.poly([(x - head_r * 1.0, hy - head_r * 0.25), (x - head_r * 0.95, hy - head_r * 0.85), (x + head_r * 0.5, hy - head_r * 1.1), (x + head_r * 0.95, hy - head_r * 0.6), (x + head_r * 0.5, hy - head_r * 0.55), (x - head_r * 0.3, hy - head_r * 0.45)], fill=hair)
+    else:                      # dark, neat, side-parted
+        cv.d.pieslice([(x - head_r * 1.0) * SS, (hy - head_r * 1.26) * SS, (x + head_r * 1.0) * SS, (hy + head_r * 0.9) * SS], 190, 350, fill=hair)
+        cv.poly([(x - head_r * 0.98, hy - head_r * 0.3), (x - head_r * 0.9, hy - head_r * 0.8), (x + head_r * 0.3, hy - head_r * 0.95), (x + head_r * 0.98, hy - head_r * 0.55), (x + head_r * 0.98, hy - head_r * 0.3), (x + head_r * 0.6, hy - head_r * 0.55), (x - head_r * 0.2, hy - head_r * 0.5)], fill=hair)
+    # features: gentle, not caricature
+    ey = hy - head_r * 0.05
+    for sgn in (-1, 1):
+        cv.ell(x + sgn * head_r * 0.38, ey, head_r * 0.11, head_r * 0.075, fill=(60, 48, 44))
+        cv.line([(x + sgn * head_r * 0.58, ey - head_r * 0.28), (x + sgn * head_r * 0.2, ey - head_r * 0.24)], tuple(max(0, c_ - 10) for c_ in hair) if hair_style != "swept" else (170, 140, 90), head_r * 0.07)
+    cv.line([(x, ey + head_r * 0.05), (x - head_r * 0.07, ey + head_r * 0.45), (x + head_r * 0.08, ey + head_r * 0.48)], (196, 150, 124), head_r * 0.06)
+    cv.line([(x - head_r * 0.28, ey + head_r * 0.78), (x, ey + head_r * 0.84), (x + head_r * 0.28, ey + head_r * 0.78)], (160, 96, 90), head_r * 0.07)
+
+
+def art_lead(w, h):
+    """Two leaders, two flags: Trump beside the US flag, Xi beside the Chinese flag."""
+    cv = Canvas(w, h)
+    cv.vgrad(0, 0, w, h, (206, 216, 230), (238, 240, 242))
+    # faint Shenzhen skyline, very low contrast
+    rnd = random.Random(1118)
+    hz = h * 0.80
+    x = -3
+    while x < w:
+        bw = rnd.uniform(8, 22); bh = rnd.uniform(8, 30)
+        cv.rect(x, hz - bh, bw, bh, fill=(214, 220, 232))
+        x += bw + rnd.uniform(1, 5)
+    px = w * 0.19
+    cv.poly([(px - 5, hz), (px - 3.5, h * 0.22), (px, h * 0.12), (px + 3.5, h * 0.22), (px + 5, hz)], fill=(208, 215, 228))
+    # floor + red carpet runner
+    cv.vgrad(0, hz, w, h - hz, (222, 222, 224), (236, 236, 236))
+    cv.line([(0, hz), (w, hz)], (200, 202, 208), 0.6)
+    cv.poly([(w * 0.30, hz + 1), (w * 0.70, hz + 1), (w * 0.76, h), (w * 0.24, h)], fill=(168, 38, 46))
+    cv.poly([(w * 0.31, hz + 1), (w * 0.69, hz + 1), (w * 0.75, h), (w * 0.25, h)], fill=(182, 44, 52))
+    # figures and flags, same baseline
+    base = h * 0.93
+    H = h * 0.86
+    cx = w * 0.5
+    sep = H * 0.30
+    flag_on_pole(cv, cx - sep - H * 0.52, base, H * 1.02, "us", +1)
+    flag_on_pole(cv, cx + sep + H * 0.52, base, H * 1.02, "cn", -1)
+    portrait(cv, cx - sep, base, H, hair=(226, 196, 120), tie=(196, 30, 40), suit=(30, 34, 54), skin=(236, 198, 166), hair_style="swept")
+    portrait(cv, cx + sep, base, H, hair=(34, 30, 32), tie=(120, 24, 40), suit=(28, 30, 44), skin=(228, 192, 156), hair_style="side")
+    return cv
+
+
+def art_gulf(w, h):
+    sea = (12, 30, 62)
+    cv = Canvas(w, h, bg=sea)
+    proj = project((43.5, 23.5, 59.5, 32.2), (0, 0, w, h))
+    land = (62, 78, 104)
+    for lon in range(44, 60, 2):
+        cv.line([proj(lon, 23), proj(lon, 33)], (20, 42, 78), 0.4)
+    for lat in range(24, 33, 2):
+        cv.line([proj(43, lat), proj(60, lat)], (20, 42, 78), 0.4)
+    for name in ("Iraq", "Iran", "Saudi Arabia", "Kuwait", "Bahrain", "Qatar", "United Arab Emirates", "Oman", "Yemen"):
+        draw_polys(cv, REGIONS[name], proj, land, outline=(90, 108, 140), width=0.5)
+    draw_polys(cv, REGIONS["Kuwait"], proj, (118, 96, 60), outline=(200, 170, 110), width=0.6)
+    draw_polys(cv, REGIONS["Iran"], proj, (84, 72, 86), outline=(120, 108, 130), width=0.5)
+    lab = (178, 196, 222)
+    cv.tracked(*proj(44.2, 31.6), "Iraq", 6.5, lab, tracking=0.8)
+    cv.tracked(*proj(52.6, 31.2), "Iran", 7.5, (230, 220, 240), tracking=1.0)
+    cv.tracked(*proj(44.0, 25.0), "Saudi Arabia", 6.5, lab, tracking=0.8)
+    kx, ky = proj(47.52, 29.35)
+    burst(cv, kx, ky, 7, (255, 120, 40))
+    burst(cv, kx, ky, 3.8, (255, 230, 120))
+    cv.tracked(kx + 8, ky - 3, "Kuwait", 6.5, (255, 255, 255), tracking=0.8)
+    qx, qy = proj(56.27, 26.8)
+    burst(cv, qx, qy, 6, (255, 255, 255))
+    burst(cv, qx, qy, 3, (255, 90, 60))
+    cv.tracked(qx - 2, qy + 5, "Qeshm", 6.5, (255, 255, 255), tracking=0.8, anchor="r")
+    bx, by = proj(50.55, 26.1)
+    cv.ell(bx, by, 3.8, 3.8, outline=(255, 255, 255), width=1.0)
+    cv.ell(bx, by, 1.3, 1.3, fill=(255, 255, 255))
+    cv.tracked(bx - 5, by - 3, "Bahrain", 6.5, (255, 255, 255), tracking=0.8, anchor="r")
+    ix, iy = proj(50.6, 30.3)
+    mid = ((ix + kx) / 2, min(iy, ky) - 6)
+    pts = []
+    for i in range(21):
+        t = i / 20
+        pts.append(((1 - t) ** 2 * ix + 2 * (1 - t) * t * mid[0] + t ** 2 * kx,
+                    (1 - t) ** 2 * iy + 2 * (1 - t) * t * mid[1] + t ** 2 * ky))
+    for i in range(0, 20, 2):
+        cv.line([pts[i], pts[i + 1]], (255, 170, 90), 1.2)
+    drone(cv, pts[9][0], pts[9][1] - 1, 3.2, (255, 210, 150))
+    cv.dashed((qx + 22, qy + 20), (qx + 3, qy + 3), (255, 255, 255), 1.0, 2.5, 2)
+    return cv
+
+
+def art_voyager(w, h):
+    cv = Canvas(w, h, bg=(8, 10, 32))
+    rnd = random.Random(11)
+    for _ in range(90):
+        x, y = rnd.random() * w, rnd.random() * h
+        r = rnd.choice((0.4, 0.5, 0.7, 0.9))
+        cv.ell(x, y, r, r, fill=rnd.choice(((255, 255, 255), (200, 210, 255), (255, 240, 220))))
+    bg = (8, 10, 32); peak = (26, 28, 66); n = 30
+    for i in range(n):
+        t = i / (n - 1); k = 1 - abs(t - 0.5) * 2
+        c = tuple(round(bg[j] + (peak[j] - bg[j]) * k) for j in range(3))
+        off = (t - 0.5) * w * 0.5
+        cx0 = w * 0.55 + off
+        cv.poly([(cx0 - w * 0.02 - h * 0.45, h + 2), (cx0 + w * 0.02 - h * 0.45, h + 2),
+                 (cx0 + w * 0.02 + h * 0.45, -2), (cx0 - w * 0.02 + h * 0.45, -2)], fill=c)
+    rnd2 = random.Random(23)
+    for _ in range(110):
+        t = rnd2.random(); y_ = rnd2.random() * h
+        cv.ell(w * 0.55 + (t - 0.5) * w * 0.4 + (h / 2 - y_) * 0.9, y_, 0.3, 0.3, fill=(150, 156, 205))
+    ex, ey, er = w * 0.2, h * 0.78, h * 0.17
+    cv.ell(ex, ey, er * 1.25, er * 1.25, fill=(26, 60, 120))
+    cv.ell(ex, ey, er, er, fill=(50, 120, 220))
+    cv.ell(ex - er * 0.35, ey - er * 0.35, er * 0.42, er * 0.3, fill=(70, 180, 110))
+    cv.ell(ex + er * 0.3, ey + er * 0.2, er * 0.35, er * 0.45, fill=(70, 180, 110))
+    cv.ell(ex - er * 0.1, ey + er * 0.5, er * 0.25, er * 0.15, fill=(240, 250, 255))
+    cv.d.chord([(ex - er) * SS, (ey - er) * SS, (ex + er) * SS, (ey + er) * SS], 318, 42, fill=(30, 78, 160))
+    cv.ell(ex - er * 0.5, ey - er * 0.58, er * 0.15, er * 0.09, fill=(255, 255, 255))
+    vx, vy = w * 0.80, h * 0.24
+    cv.dashed((ex + er * 0.7, ey - er * 0.7), (vx - 10, vy + 5), (160, 175, 240), 0.9, 2.5, 2.5)
+    ang = math.atan2(vy - ey, vx - ex)
+    cv.ell(vx, vy, 9, 9, outline=(235, 238, 248), width=1.3)
+    cv.ell(vx, vy, 6.5, 6.5, fill=(60, 64, 90), outline=(235, 238, 248), width=0.9)
+    cv.ell(vx, vy, 2.2, 2.2, fill=(235, 238, 248))
+    cv.line([(vx, vy), (vx - 6 * math.cos(ang), vy - 6 * math.sin(ang))], (235, 238, 248), 1.0)
+    cv.rect(vx + 7, vy - 3, 5, 6, fill=(190, 194, 210))
+    cv.line([(vx + 12, vy), (vx + 24, vy - 7)], (200, 204, 220), 0.9)
+    cv.line([(vx + 12, vy + 2), (vx + 22, vy + 9)], (200, 204, 220), 0.9)
+    y0 = h * 0.64
+    x0, x1 = ex + er + 8, w * 0.90
+    cv.line([(x0, y0 - 3), (x0, y0 + 3)], GOLD, 0.9)
+    cv.line([(x1, y0 - 3), (x1, y0 + 3)], GOLD, 0.9)
+    cv.line([(x0, y0), (x1, y0)], GOLD, 0.9)
+    cv.tracked((x0 + x1) / 2, y0 + 5, "1 light-day", 7, GOLD, tracking=1.0, anchor="m")
+    cv.tracked((x0 + x1) / 2, y0 + 15, "25.9 billion km", 6.5, (230, 232, 250), tracking=0.8, anchor="m")
+    cv.tracked(vx - 12, vy - 14, "Voyager 1", 6.5, (255, 255, 255), tracking=0.8, anchor="r")
+    return cv
+
+
+# --------------------------------------------------------------------------- grid art
+def art_eu(w, h):
+    cv = Canvas(w, h, bg=(22, 58, 160))
+    cx, cy, r = w * 0.2, h * 0.5, h * 0.33
+    for i in range(12):
+        a = math.radians(-90 + i * 30)
+        cv.star(cx + r * math.cos(a), cy + r * math.sin(a), 3.0, 1.3, GOLD)
+    cv.text(w * 0.40, h * 0.12, "€45bn", SERIF_XB, 24, GOLD)
+    cv.text(w * 0.41, h * 0.70, "LOAN TO UKRAINE · 2027", SANS_B, 7.5, (210, 220, 255))
+    return cv
+
+
+def art_drones(w, h):
+    cv = Canvas(w, h, bg=(10, 12, 36))
+    rnd = random.Random(5)
+    for _ in range(30):
+        cv.ell(rnd.random() * w, rnd.random() * h * 0.7, 0.6, 0.6, fill=(255, 255, 255))
+    for i, (fx, fy, s) in enumerate(((0.80, 0.22, 5), (0.66, 0.40, 5.5), (0.86, 0.50, 4.5), (0.52, 0.26, 4.5), (0.40, 0.46, 5), (0.70, 0.66, 4))):
+        drone(cv, w * fx, h * fy, s, (225, 228, 240))
+    # explosions over city silhouette
+    bx = 0
+    while bx < w * 0.5:
+        bw, bh = rnd.uniform(6, 12), rnd.uniform(8, 20)
+        cv.rect(bx, h - bh, bw, bh, fill=(30, 30, 50))
+        bx += bw + 2
+    burst(cv, w * 0.17, h * 0.55, 8, (255, 140, 40))
+    burst(cv, w * 0.17, h * 0.55, 4, (255, 240, 160))
+    burst(cv, w * 0.31, h * 0.70, 5, (255, 140, 40))
+    cv.rect(0, h - 11, w, 11, fill=(0, 0, 0))
+    cv.ctext(w / 2, h - 10.5, "141 FIRED · 126 DOWNED · ODESA HIT", SANS_B, 7.5, (255, 255, 255))
+    return cv
+
+
+def art_senate(w, h):
+    cv = Canvas(w, h, bg=(255, 255, 255))
+    ak = project((-170, 52, -128, 72), (w * 0.60, 30, w * 0.40, 30))
+    draw_polys(cv, WORLD, ak, (205, 220, 242), outline=(32, 80, 190), width=0.4)
+    cv.rect(0, 0, w, 30, fill=(255, 255, 255))
+    cv.rect(0, 30, w * 0.60, h - 30, fill=(255, 255, 255))
+    bw = w - 14
+    bl = bw * 0.56
+    cv.rect(7, 9, bl, 20, fill=(32, 80, 190))
+    cv.rect(7 + bl, 9, bw - bl, 20, fill=(185, 36, 34))
+    cv.text(12, 11.5, "56", SANS_B, 13, (255, 255, 255))
+    cv.rtext(7 + bw - 5, 11.5, "44", SANS_B, 13, (255, 255, 255))
+    cv.ctext(7 + bl, 13.5, "D | R", SANS_B, 8, (255, 255, 255))
+    cv.line([(7 + bw / 2, 6), (7 + bw / 2, 32)], INK, 1)
+    cv.text(7, 36, "US SENATE", SANS_B, 7.5, GREY)
+    cv.text(7, 46, "JANUARY 2027", SANS_B, 7.5, GREY)
+    cv.text(w * 0.60, 46, "ALASKA", SANS_B, 6.5, (32, 80, 190))
+    cv.star(w * 0.80, 44, 3.2, 1.4, (32, 80, 190))
+    return cv
+
+
+def art_cop(w, h):
+    cv = Canvas(w, h, bg=(232, 243, 240))
+    ex, ey, er = w * 0.22, h * 0.5, h * 0.33
+    cv.ell(ex, ey, er, er, fill=(52, 128, 220))
+    cv.ell(ex - er * 0.3, ey - er * 0.35, er * 0.42, er * 0.32, fill=(66, 170, 100))
+    cv.ell(ex + er * 0.25, ey + er * 0.25, er * 0.35, er * 0.4, fill=(66, 170, 100))
+    # torn draft paper
+    px, py, pw, ph = w * 0.44, 7, w * 0.26, h - 14
+    tear = [(px, py), (px + pw, py), (px + pw, py + ph), (px + pw * 0.75, py + ph * 0.9), (px + pw * 0.5, py + ph), (px + pw * 0.25, py + ph * 0.88), (px, py + ph)]
+    cv.poly(tear, fill=(255, 255, 255), outline=(150, 150, 150), width=0.6)
+    cv.text(px + 4, py + 3, "DRAFT", SANS_B, 7.5, RED)
+    for i in range(4):
+        cv.line([(px + 4, py + 16 + i * 6), (px + pw - 6, py + 16 + i * 6)], (170, 170, 170), 0.8)
+    cv.line([(px + pw * 0.5, py), (px + pw * 0.5, py + ph)], (200, 60, 60), 0.9)
+    # thermometer
+    tx = w * 0.83
+    cv.rrect(tx - 3, 7, 6, h - 24, 3, fill=(255, 255, 255), outline=RED, width=1)
+    cv.rect(tx - 1.2, 16, 2.4, h - 34, fill=(220, 50, 40))
+    cv.ell(tx, h - 13, 6, 6, fill=(220, 50, 40))
+    cv.text(4, h - 11, "COP31 · ANTALYA", SANS_B, 7.5, GREY)
+    return cv
+
+
+def art_inflation(w, h):
+    cv = Canvas(w, h, bg=(255, 255, 255))
+    base = h - 12
+    for cx, val, hh, c, lab in ((w * 0.30, "3.6%", 22, (110, 115, 125), "UK CPI"), (w * 0.70, "4.0%", 26, (32, 80, 190), "EURO AREA")):
+        cv.rect(cx - 16, base - hh, 32, hh, fill=c)
+        cv.ctext(cx, base - hh - 13, val, SANS_B, 11, INK)
+        cv.ctext(cx, base + 1, lab, SANS_B, 7, GREY)
+        cv.poly([(cx + 22, base - hh + 2), (cx + 26, base - hh - 5), (cx + 30, base - hh + 2)], fill=RED)
+    cv.line([(8, base), (w - 8, base)], (120, 120, 120), 0.8)
+    cv.text(5, 3, "OCT CPI, Y/Y", SANS_B, 7, GREY)
+    return cv
+
+
+def art_cyclone(w, h):
+    cv = Canvas(w, h, bg=(176, 216, 232))
+    proj = project((73.0, 8.6, 104.0, 19.6), (0, 0, w, h))
+    for lon in range(72, 106, 4):
+        cv.line([proj(lon, 8), proj(lon, 20)], (150, 196, 216), 0.4)
+    for lat in range(8, 21, 4):
+        cv.line([proj(72, lat), proj(106, lat)], (150, 196, 216), 0.4)
+    for name in ("India", "Sri Lanka", "Bangladesh", "Myanmar"):
+        draw_polys(cv, REGIONS[name], proj, (236, 222, 180), outline=(190, 170, 120), width=0.5)
+    for lon, lat, nm in ((83.3, 17.7, "Visakhapatnam"), (80.27, 13.08, "Chennai")):
+        x_, y_ = proj(lon, lat)
+        cv.ell(x_, y_, 1.2, 1.2, fill=(60, 60, 70))
+        cv.text(x_ - (34 if nm == "Chennai" else 0), y_ - 8 if nm != "Chennai" else y_ - 2, nm, SANS, 5.5, (60, 60, 70))
+    cx, cy = proj(85.4, 13.1)
+    # track to Andhra coast
+    lx, ly = proj(81.2, 16.2)
+    cv.dashed((cx, cy), (lx, ly), (200, 40, 40), 1.2, 3, 2)
+    cv.poly([(lx, ly), (lx + 5, ly + 3), (lx + 3, ly + 6)], fill=(200, 40, 40))
+    # spiral
+    for r, a0, a1 in ((13, 30, 330), (9, 200, 120), (5, 20, 300)):
+        cv.arc(cx, cy, r, a0, a1, (255, 255, 255), 2.2)
+    cv.ell(cx, cy, 2.5, 2.5, fill=(255, 255, 255))
+    cv.ell(cx, cy, 15, 15, outline=(255, 255, 255), width=0.6)
+    cv.text(6, h - 20, "INDIA", SANS_B, 7.5, (90, 80, 50))
+    cv.text(cx + 16, cy - 4, "AKVAN", SANS_B, 7.5, (160, 20, 20))
+    cv.text(cx + 16, cy + 5, "90–100 km/h", SANS, 6.5, (40, 40, 40))
+    cv.text(cx - 20, h - 11, "BAY OF BENGAL", SANS_B, 7, (40, 90, 140))
+    cv.text(lx - 40, ly - 16, "ANDHRA", SANS_B, 7, (90, 80, 50))
+    return cv
+
+
+def art_sudan(w, h):
+    cv = Canvas(w, h)
+    cv.vgrad(0, 0, w, h, (214, 170, 110), (240, 214, 160))
+    rnd = random.Random(9)
+    bx = 0
+    while bx < w:
+        bw, bh = rnd.uniform(14, 26), rnd.uniform(12, 24)
+        cv.rect(bx, h - bh, bw, bh, fill=(130, 96, 50))
+        bx += bw + rnd.uniform(2, 5)
+    cv.poly([(w * 0.30, h), (w * 0.30, h * 0.35), (w * 0.33, h * 0.22), (w * 0.36, h * 0.35), (w * 0.36, h)], fill=(110, 80, 40))
+    drone(cv, w * 0.72, h * 0.28, 6, (50, 40, 36))
+    drone(cv, w * 0.90, h * 0.18, 4, (50, 40, 36))
+    cx, cy = w * 0.55, h * 0.62
+    cv.ell(cx, cy, 9, 9, outline=(190, 30, 30), width=1.2)
+    cv.line([(cx - 13, cy), (cx + 13, cy)], (190, 30, 30), 1)
+    cv.line([(cx, cy - 13), (cx, cy + 13)], (190, 30, 30), 1)
+    cv.text(4, 3, "EL OBEID · NORTH KORDOFAN", SANS_B, 7.5, (70, 50, 30))
+    chip(cv, w - 4, h - 4, "37 KILLED · 9 STRIKES", SANS_B, 7.5, fg=(255, 255, 255), bg=(150, 24, 24), right=True, top=True)
+    return cv
+
+
+def art_gold(w, h):
+    cv = Canvas(w, h, bg=(253, 247, 228))
+    # bars
+    for i, (bx, by) in enumerate(((8, h - 14), (26, h - 14), (17, h - 24))):
+        cv.poly([(bx, by + 10), (bx + 3, by), (bx + 19, by), (bx + 22, by + 10)], fill=(232, 182, 48), outline=(170, 120, 20), width=0.6)
+    pts = [(w * 0.30, 10), (w * 0.44, 15), (w * 0.56, 12), (w * 0.70, 26), (w * 0.84, 34), (w * 0.93, 46)]
+    cv.line(pts, (190, 30, 30), 2.2)
+    ex, ey = pts[-1]
+    cv.poly([(ex + 2, ey + 4), (ex - 9, ey + 1), (ex - 1, ey - 8)], fill=(190, 30, 30))
+    cv.text(w * 0.44, 24, "$3,788", SERIF_XB, 15, INK)
+    cv.text(w * 0.44, 44, "14-MONTH LOW", SANS_B, 7, (190, 30, 30))
+    cv.text(4, 3, "SPOT GOLD", SANS_B, 7, GREY)
+    return cv
+
+
+def art_gta(w, h):
+    cv = Canvas(w, h)
+    cv.vgrad(0, 0, w, h * 0.7, (70, 20, 110), (255, 110, 90))
+    cv.vgrad(0, h * 0.7, w, h * 0.3, (255, 150, 90), (30, 20, 50))
+    cv.ell(w * 0.78, h * 0.46, 14, 14, fill=(255, 220, 120))
+    for i in range(5):
+        cv.line([(w * 0.60, h * (0.36 + i * 0.05)), (w * 0.96, h * (0.36 + i * 0.05))], (255, 110, 90), 1.0)
+    cv.rect(0, h * 0.72, w, h * 0.28, fill=(22, 16, 40))
+    # palms
+    for px in (w * 0.08, w * 0.20, w * 0.90):
+        cv.line([(px, h * 0.75), (px + 2, h * 0.30)], (22, 16, 40), 1.6)
+        for a in range(-80, 100, 36):
+            r = math.radians(a)
+            cv.line([(px + 2, h * 0.30), (px + 2 + 9 * math.cos(r), h * 0.30 - 5 * math.sin(r) + 3)], (22, 16, 40), 1.6)
+    # controller
+    cx, cy, cw, ch = w * 0.33, h * 0.34, w * 0.30, h * 0.30
+    cv.rrect(cx, cy, cw, ch, 5, fill=(245, 245, 250), outline=INK, width=0.8)
+    cv.ell(cx + cw * 0.18, cy + ch * 0.5, 4, 4, outline=INK, width=0.8)
+    for dx, dy in ((0.78, 0.3), (0.86, 0.5), (0.78, 0.7), (0.70, 0.5)):
+        cv.ell(cx + cw * dx, cy + ch * dy, 1.8, 1.8, fill=INK)
+    cv.text(4, 3, "GTA VI · 00:00 NZDT", SANS_B, 7.5, (255, 255, 255))
+    cv.rtext(w - 4, h - 11, "13 YEARS AFTER GTA V", SANS_B, 7, (255, 220, 120))
+    return cv
+
+
+def art_horn(w, h):
+    cv = Canvas(w, h, bg=(176, 216, 232))
+    proj = project((33.0, 11.6, 49.0, 17.4), (0, 0, w, h))
+    for name in ("Sudan", "South Sudan", "Kenya", "Somalia", "Somaliland", "Djibouti", "Yemen", "Saudi Arabia"):
+        draw_polys(cv, REGIONS[name], proj, (236, 226, 196), outline=(200, 185, 150), width=0.4)
+    draw_polys(cv, REGIONS["Ethiopia"], proj, (120, 180, 110), outline=(60, 110, 60), width=0.5)
+    draw_polys(cv, REGIONS["Eritrea"], proj, (220, 120, 100), outline=(150, 60, 50), width=0.5)
+    # troop markers either side of the border
+    for lon, lat in ((37.1, 14.0), (37.9, 14.1), (38.6, 14.0)):
+        x, y = proj(lon, lat)
+        cv.poly([(x, y + 4), (x - 4, y + 4), (x, y - 3), (x + 4, y + 4)], fill=(20, 70, 30))
+    for lon, lat in ((36.9, 15.1), (37.6, 15.2), (38.3, 15.1)):
+        x, y = proj(lon, lat)
+        cv.poly([(x, y - 4), (x - 4, y - 4), (x, y + 3), (x + 4, y - 4)], fill=(130, 20, 20))
+    x, y = proj(40.6, 12.7)
+    cv.text(x, y, "ETHIOPIA", SANS_B, 8, (20, 60, 25))
+    x, y = proj(36.2, 16.9)
+    cv.text(x, y, "ERITREA", SANS_B, 8, (120, 20, 20))
+    x, y = proj(39.7, 13.45)
+    cv.text(x, y, "TIGRAY", SANS, 6.5, (30, 50, 30))
+    for lon, lat, nm, dxx, dyy in ((38.93, 15.33, "Asmara", 3, -4), (39.47, 13.5, "", 0, 0)):
+        x_, y_ = proj(lon, lat)
+        cv.ell(x_, y_, 1.2, 1.2, fill=(40, 40, 40))
+        if nm:
+            cv.text(x_ + dxx, y_ + dyy, nm, SANS, 5.5, (40, 40, 40))
+    x, y = proj(41.5, 16.6)
+    cv.text(x, y, "RED SEA", SANS, 6, (60, 110, 150))
+    chip(cv, 4, h - 4, "1,000 KM BORDER", SANS_B, 7, fg=INK, bg=(255, 255, 255), top=True)
+    return cv
+
+
+ART = {"apec": art_lead, "gulf": art_gulf, "voyager": art_voyager, "eu": art_eu,
+       "drones": art_drones, "senate": art_senate, "climate": art_cop, "inflation": art_inflation,
+       "cyclone": art_cyclone, "elobeid": art_sudan, "gold": art_gold, "gta": art_gta,
+       "horn": art_horn}
+
+
+# --------------------------------------------------------------------------- page pieces
+def soft_shadow(cv, x, y, w, h):
+    """Three-step offset shadow: a gentle lift without a hard edge."""
+    for off, c in ((3.0, (236, 231, 217)), (2.0, (226, 220, 204)), (1.2, (214, 208, 190))):
+        cv.rect(x + off, y + off, w, h, fill=c)
+
+
+def kicker(cv, x, y, w, n, c, label, src=None, nsize=15, ksize=10):
+    r = nsize / 2
+    cv.ell(x + r, y + r, r, r, fill=c)
+    cv.ctext(x + r, y + r - nsize * 0.40, str(n), SANS_B, nsize * 0.62, (255, 255, 255))
+    cv.tracked(x + nsize + 5, y + r - ksize * 0.62, label, ksize * 0.92, c, tracking=1.4)
+    if src:
+        cv.tracked(x + w, y + r - 8 * 0.62, src, 7.5, GREY, tracking=1.2, anchor="r")
+
+
+def place_dots():
+    """lat/lon for every story 1..39 (index places are approximate city/country centroids)."""
+    return {
+        1: (22.54, 114.06), 2: (29.35, 47.52), 4: (50.85, 4.35), 5: (46.48, 30.73), 6: (64.2, -152.0),
+        7: (36.9, 30.7), 8: (51.5, -0.1), 9: (13.1, 85.4), 10: (13.18, 30.22), 11: (40.7, -74.0),
+        12: (-41.3, 174.8), 13: (14.5, 38.5),
+        14: (38.9, -77.0), 15: (37.57, 126.98), 16: (22.9, 114.5), 17: (22.2, 113.6), 18: (23.0, 113.3),
+        19: (15.35, 44.2), 20: (31.8, 35.2), 21: (23.8, 90.4), 22: (-6.2, 106.8), 23: (33.6, 75.0),
+        24: (19.8, 96.1), 25: (12.7, 28.4), 26: (-29.0, 25.0), 27: (1.4, 32.3), 28: (52.52, 13.4),
+        29: (45.7, 26.6), 30: (45.07, 7.69), 31: (51.5, -0.1), 32: (40.7, -74.0), 33: (-33.45, -70.67),
+        34: (-36.0, -71.5), 35: (4.7, -74.1), 36: (-25.0, 134.0), 37: (-17.7, 178.0), 38: (-21.2, -159.8),
+        39: (-42.9, 147.3),
+    }
+
+
+def main():
+    page = Canvas(W, H, bg=PAPER)
+    cv = page
+    X0, X1 = 18, 1006
+    CW = X1 - X0
+    meta = DATA["meta"]
+
+    # ---- masthead
+    cv.tracked(X0, 12, meta["kicker_left"], 11.5, RED, tracking=2.2)
+    cv.tracked(X1, 12.5, meta["kicker_right"], 10.5, INK, tracking=2.0, anchor="r")
+    cv.line([(X0, 29), (X1, 29)], INK, 0.8)
+    title = meta["masthead"]
+    for sz in (62, 60, 58, 56, 54):
+        if cv.tw(title, DISPLAY, sz) <= CW:
+            break
+    cv.text(X0 - 2, 31, title, DISPLAY, sz, INK)
+    cv.text(X0, 102, meta["subline"], BODY_I, 14.5, (40, 40, 44))
+    cv.line([(X0, 123), (X1, 123)], INK, 2.2)
+
+    # ---- region strip
+    sy = 128
+    total = sum(c["w"] for c in DATA["continents"])
+    sx = X0
+    for c in DATA["continents"]:
+        wdt = CW * c["w"] / total
+        cv.rect(sx, sy, wdt - 1.5, 19, fill=col(c["color"]))
+        cv.tracked(sx + wdt / 2, sy + 4.2, f'{c["name"]} {c["count"]}', 8.6, (255, 255, 255), tracking=1.5, anchor="m")
+        sx += wdt
+
+    # ---- hero zone: lead (60%) + two stacked heroes (40%)
+    HY, HB = 154, 391
+    gap = 12
+    LW = round((CW - gap) * 0.6)
+    RX = X0 + LW + gap
+    RW = X1 - RX
+    heroes = DATA["heroes"]
+    # lead
+    lead = heroes[0]
+    LAH = 114
+    soft_shadow(cv, X0, HY, LW, LAH)
+    cv.paste(art_lead(LW, LAH), X0, HY)
+    cv.rect(X0, HY, LW, LAH, outline=INK, width=1.2)
+    c = col(lead["color"])
+    kicker(cv, X0, HY + LAH + 7, LW, lead["n"], c, lead["cat"], lead.get("source"))
+    used = cv.fit(X0, HY + LAH + 26, LW, lead["headline"], HEAD, [26, 25, 24, 23, 22], 1.08, 2)
+    cv.fit(X0, HY + LAH + 26 + used + 5, LW, lead["dek"], BODY, [12, 11.5, 11], 1.28, 3, (36, 36, 40))
+    # stacked heroes
+    RH = (HB - HY - gap) / 2
+    AW = 150
+    for i, st in enumerate(heroes[1:]):
+        y = HY + i * (RH + gap)
+        art = ART[st["art"]](AW, RH)
+        soft_shadow(cv, RX, y, AW, RH)
+        cv.paste(art, RX, y)
+        cv.rect(RX, y, AW, RH, outline=INK, width=1.0)
+        tx = RX + AW + 10
+        tw = X1 - tx
+        c = col(st["color"])
+        kicker(cv, tx, y + 1, tw, st["n"], c, st["cat"], st.get("source"), nsize=13, ksize=9)
+        used = cv.fit(tx, y + 20, tw, st["headline"], HEAD, [16, 15.5, 15, 14.5, 14], 1.1, 3)
+        cv.fit(tx, y + 20 + used + 4, tw, st["dek"], BODY, [10.5, 10, 9.5], 1.25, 3, (36, 36, 40))
+
+    # ---- grid rows
+    def row(y, items):
+        gw = (CW - 4 * gap) / 5
+        for i, st in enumerate(items):
+            gx = X0 + i * (gw + gap)
+            art = ART[st["art"]](gw, 58)
+            soft_shadow(cv, gx, y, gw, 58)
+            cv.paste(art, gx, y)
+            cv.rect(gx, y, gw, 58, outline=INK, width=1.0)
+            c = col(st["color"])
+            kicker(cv, gx, y + 63, gw, st["n"], c, st["cat"], nsize=13, ksize=9)
+            used = cv.fit(gx, y + 79, gw, st["headline"], HEAD, [14, 13.5, 13, 12.5], 1.12, 2)
+            cv.fit(gx, y + 79 + used + 3, gw, st["dek"], BODY, [10.5, 10, 9.5], 1.22, 2, (40, 40, 44))
+
+    cv.line([(X0, 397), (X1, 397)], RULE, 0.6)
+    row(404, DATA["grid"][:5])
+    cv.line([(X0, 549), (X1, 549)], RULE, 0.6)
+    row(556, DATA["grid"][5:])
+
+    # ---- also section
+    AY = 702
+    cv.line([(X0, AY), (X1, AY)], INK, 2.2)
+    cv.tracked(X0, AY + 6, meta["also_line"], 11, INK, tracking=2.0)
+    cv.tracked(X1, AY + 8, "26 more stories · numbers 14–39 on the map", 7.5, GREY, tracking=1.4, anchor="r")
+    BY = AY + 26
+
+    # map
+    MX, MW, MH = X0, 310, 150
+    sea = (206, 230, 240)
+    mp = Canvas(MW, MH, bg=sea)
+    mp.vgrad(0, 0, MW, MH, (198, 226, 238), (214, 234, 242))
+    proj = project((-176, -57, 188, 83), (0, 0, MW, MH))
+    for lon in range(-150, 181, 30):
+        mp.line([proj(lon, -57), proj(lon, 83)], (182, 210, 224), 0.4)
+    for lat in (-30, 0, 30, 60):
+        mp.line([proj(-176, lat), proj(188, lat)], (182, 210, 224), 0.4)
+    draw_polys(mp, WORLD, proj, (228, 216, 180), outline=(196, 182, 140), width=0.4)
+    dots = place_dots()
+    regcol = {s["n"]: col(s["color"]) for s in DATA["heroes"] + DATA["grid"] + DATA["list"]}
+    for n in range(14, 40):
+        lat, lon = dots[n]
+        x, y = proj(lon, lat)
+        mp.ell(x, y, 3.4, 3.4, fill=regcol[n], outline=(255, 255, 255), width=0.6)
+    # numbered featured dots with light collision nudging
+    nudge = {8: (-7, -7), 4: (3, 6), 5: (4, -5), 7: (-3, 7), 10: (-5, 1), 13: (5, 3), 2: (3, -3), 9: (2, 4)}
+    for n in list(range(1, 3)) + list(range(4, 14)):
+        lat, lon = dots[n]
+        x, y = proj(lon, lat)
+        dx, dy = nudge.get(n, (0, 0))
+        if (dx, dy) != (0, 0):
+            mp.line([(x, y), (x + dx, y + dy)], (255, 255, 255), 1.2)
+        x, y = x + dx, y + dy
+        mp.ell(x, y, 6.8, 6.8, fill=regcol[n], outline=(255, 255, 255), width=1)
+        mp.ctext(x, y - 4.4, str(n), SANS_B, 7.5, (255, 255, 255))
+    mp.text(6, 4, "WHERE IT HAPPENED", SANS_B, 9, INK)
+    mp.text(6, 15, "big dots 1–13 · small dots 14–39", SANS, 7.5, GREY)
+    chip(mp, 6, MH - 5, "3 = VOYAGER 1 · 25.9bn KM, OFF THE MAP", SANS_B, 8, top=True)
+    soft_shadow(cv, MX, BY, MW, MH)
+    cv.paste(mp, MX, BY)
+    cv.rect(MX, BY, MW, MH, outline=INK, width=1.0)
+
+    # stats 2x2 under the map
+    SY = BY + MH + 8
+    sw = MW / 2
+    sh = 46
+    for i, s in enumerate(DATA["stats"]):
+        sx = MX + (i % 2) * sw
+        yy = SY + (i // 2) * (sh + 4)
+        tx = sx + (0 if i % 2 == 0 else 10)
+        tw = sw - 14
+        if i % 2 == 1:
+            cv.line([(sx + 2, yy + 2), (sx + 2, yy + sh - 4)], RULE, 0.7)
+        if i < 2:
+            cv.line([(sx + (0 if i % 2 == 0 else 10), yy + sh), (sx + sw - 8, yy + sh)], RULE, 0.7)
+        cv.text(tx, yy - 4, s["big"], HEAD, 24, INK)
+        cv.fit(tx, yy + 25, tw, s["label"], LABEL_R, [8.5, 8], 1.2, 2, (50, 50, 54))
+
+    # index: two columns
+    IX = MX + MW + 14
+    IW = X1 - IX
+    ICW = (IW - 14) / 2
+    items = DATA["list"]
+    colA, colB = items[:13], items[13:]
+    avail = (SY + 2 * sh + 4) - BY
+    for sz in (11, 10.5, 10, 9.5):
+        rowh = sz * 1.2 + 3.4
+
+        def needs(coll):
+            tot = 0
+            for it in coll:
+                full = it["place"] + ": " + it["text"]
+                tot += len(cv.wrap(full, BODY, sz, ICW - 20)) * sz * 1.25 + 3.4
+            return tot
+        if max(needs(colA), needs(colB)) <= avail:
+            break
+    spare = avail - max(needs(colA), needs(colB))
+    extra = min(6.0, max(0.0, spare / 13))
+    for ci, coll in enumerate((colA, colB)):
+        cx = IX + ci * (ICW + 14)
+        yy = BY + 1
+        for it in coll:
+            c = col(it["color"])
+            cv.ell(cx + 7, yy + sz * 0.62, 7, 7, fill=c)
+            cv.ctext(cx + 7, yy + sz * 0.62 - 4.3, str(it["n"]), SANS_B, 7.5, (255, 255, 255))
+            place = it["place"] + ":"
+            lines = cv.wrap(place + " " + it["text"], BODY, sz, ICW - 20)
+            ly = yy
+            for li, ln in enumerate(lines):
+                if li == 0 and ln.startswith(place):
+                    cv.text(cx + 19, ly, place, BODY_B, sz, INK)
+                    cv.text(cx + 19 + cv.tw(place, BODY_B, sz), ly, ln[len(place):], BODY, sz, (30, 30, 34))
+                else:
+                    cv.text(cx + 19, ly, ln, BODY, sz, (30, 30, 34))
+                ly += sz * 1.25
+            yy = ly + 3.4 + extra
+        if ci == 0:
+            cv.line([(cx + ICW + 7, BY), (cx + ICW + 7, SY + 2 * sh)], RULE, 0.6)
+
+    # ---- footer
+    FY = 996
+    cv.line([(X0, FY), (X1, FY)], INK, 1.2)
+    cv.text(X0, FY + 5, meta["footer_left"], SANS, 8.5, GREY)
+    cv.rtext(X1, FY + 5, meta["footer_right"], SANS, 8.5, GREY)
+
+    # frame
+    cv.rect(0.5, 0.5, W - 1, H - 1, outline=INK, width=2.5)
+
+    out = page.img.resize((W, H), Image.LANCZOS)
+    out.save(OUT, optimize=True)
+    print("saved", OUT, out.size, os.path.getsize(OUT), "bytes")
+
+
+if __name__ == "__main__":
+    main()

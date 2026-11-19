@@ -39,10 +39,14 @@ so small quality gains move many places.
   randomness — a plain byte-for-byte copy. The grader runs it twice and the
   two outputs must be byte-identical.
 - `render_square.py` — the renderer that draws `entry.png` (Python + PIL,
-  2× supersampled, Lanczos-downscaled to 1024). This is how the image is made.
-- `stories.json` — the story data (39 stories, stats, map dots). Every number
-  in it was verified against live reporting on 18 Nov 2026, except the items
-  flagged unverified in IMPROVEMENTS.md.
+  3× supersampled, Lanczos-downscaled to 1024). It reads `stories.json`
+  for every word on the page, `world_110m.json` / `regions_50m.json`
+  (Natural Earth coastlines, public domain) for the world map and the Gulf /
+  Bay of Bengal / Horn of Africa insets, and the OFL fonts in `fonts/`.
+- `stories.json` — the story data (39 stories, stats). Every number in it was
+  verified against live reporting on 18 Nov 2026 (the items once flagged
+  unverified — 141 drones, Cyclone Akvan, Ethiopia–Eritrea, GTA VI timing —
+  were re-checked on 18 Nov and confirmed).
 - `reference.jpg` — the format reference the user sent: the layout this page
   mimics (masthead, date line, continent strip, 3 heroes, story grid,
   WHERE IT HAPPENED map, stat strip).
@@ -50,7 +54,8 @@ so small quality gains move many places.
 ## How to run
 
 ```bash
-python3 render_square.py   # re-renders entry.png (1024x1024)
+pip install pillow         # the only dependency of the renderer
+python3 render_square.py   # re-renders entry.png (1024x1024) from stories.json
 python3 main.py            # writes entry.png to $MAKEFUN_OUTPUT_DIR (default /output)
 ```
 
@@ -75,12 +80,14 @@ Current content (39 stories · 6 continents · one day):
   hits back at a US base in Kuwait (Ali Al-Salem) · Voyager 1 first craft one
   light-day from Earth (25.9bn km, 10:16 UTC).
 - **Grid:** EU €45bn Ukraine loan · Russia fires 141 drones at Ukraine ·
-  Democrats take Alaska Senate 56–44 (Peltola over Sullivan) · COP31 draft
+  Democrats flip Alaska, Senate 56–44 (Peltola over Sullivan) · COP31 draft
   splits talks in Antalya ($120bn adaptation finance) · Inflation: UK 3.6%,
-  euro area 4.0% · Cyclone Akvan (India) · Amnesty: RSF drones killed 37 in
-  El Obeid · Gold below $3,800 ($3,788, 14-month low) · GTA VI unlocks first
-  in New Zealand · Ethiopia/Eritrea mass troops on the border.
-- **WHERE IT HAPPENED:** world map + numbered index 14–39.
+  euro area 4.0% · Severe Cyclone Akvan (IMD: Andhra landfall ~noon 20 Nov) ·
+  Amnesty: RSF drones killed 37 in El Obeid · Gold below $3,800 ($3,788,
+  14-month low) · GTA VI unlocks first in New Zealand · Ethiopia/Eritrea mass
+  troops on the border.
+- **WHERE IT HAPPENED:** real world map (Natural Earth) with all 39 stories
+  dotted (big numbered dots 1–13, small dots 14–39) + numbered index 14–39.
 - **Stats:** 141 · 56–44 · 25.9bn km · $3,800.
 
 ## How to improve it
@@ -106,6 +113,9 @@ IMPROVEMENTS.md    ranked improvement ideas + top entries to study
 entry.png          the current image (1024x1024, ≤1 MiB)
 main.py            entry program (copies entry.png to the output dir)
 render_square.py   renderer (PIL; draws entry.png from stories.json)
-stories.json       verified story data
+stories.json       verified story data (single source of truth for all text)
+world_110m.json    Natural Earth 110m land polygons (world map)
+regions_50m.json   Natural Earth 50m country polygons (Gulf / Bay of Bengal / Horn insets)
+fonts/             OFL fonts used by the renderer (Noto Serif/Sans, Playfair Display)
 reference.jpg      format reference (the user's original image)
 ```

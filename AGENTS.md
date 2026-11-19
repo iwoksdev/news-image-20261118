@@ -37,12 +37,32 @@ is already submitted and every change must keep it valid.
 
 ## Rendering
 
-- PIL/matplotlib only. Headless Chromium does not work in this sandbox.
-- `render_square.py` draws at 2× and downscales with Lanczos to 1024.
-- Fonts: Noto Serif for headlines, Noto Sans for body (check `fc-list`).
-  No external resources, no web fonts — everything inline/self-contained.
-- The world map is drawn from polygon coordinates in the code
-  (no external geojson in this repo).
+- PIL only (`pip install pillow`). Headless Chromium does not work in this
+  sandbox.
+- `render_square.py` draws at 4× and downscales with Lanczos to 1024. It is
+  deterministic (seeded RNG for stars/skylines) — rendering twice gives the
+  same bytes.
+- All page text lives in `stories.json`; edit text there, not in the renderer.
+  `fit()` prints a `WARNING overflow` line if a headline/dek needs more lines
+  than its slot — shorten the text until the render is warning-free.
+- Fonts come from `./fonts` (all OFL, static instances subset to Latin).
+  Owner-locked NYT three-font system, do not swap or add families:
+  Playfair Display (`HEAD`/`HEAD_BK`) = masthead date, lead/hero/grid
+  headlines, stat numbers; PT Serif (`BODY`/`BODY_B`) = deks, index text,
+  footers; PT Serif Italic (`BODY_I`) = the subtitle line; Inter Bold in
+  tracked uppercase via `Canvas.tracked()` (`LABEL`) = section labels,
+  kickers, region strip, folio, map/chip labels, stat labels (Inter Regular
+  for the quieter ones). Headlines must stay visibly distinct from body
+  (different family, larger, bold). No system fonts, no web fonts.
+- Hero zone is two-column: lead story (60% width, full zone height, biggest
+  headline, two-figure art) + heroes 2–3 stacked in the right 40% with the
+  same 12 px gutter. Lead top/bottom align with hero 2 top / hero 3 bottom.
+- Render at 4x supersample (`SS = 4`) and downscale with Lanczos — this is
+  what keeps edges soft. Do not lower it. Art panels get a 3-step soft
+  shadow (`soft_shadow`) — keep it subtle.
+- Maps are drawn from `world_110m.json` (world) and `regions_50m.json`
+  (country shapes for the insets) — Natural Earth, public domain. Each art
+  panel is drawn on its own sub-canvas, so map polygons clip to the panel.
 
 ## What NOT to do
 
